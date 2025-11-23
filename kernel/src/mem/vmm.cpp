@@ -25,13 +25,13 @@ namespace mem {
             if (hhdm_base + entry->base + entry->length > hhdm_end)
                 hhdm_end = hhdm_base + entry->base + entry->length;
         }
-        hhdm_end = klib::align_up(hhdm_end, 0x1000);
+        hhdm_end = klib::align_up(hhdm_end, PAGE_SIZE);
         heap_base = hhdm_end;
         heap_size = (usize)12 * 1024 * 1024 * 1024;
         kernel_virt_alloc_base = heap_base + heap_size;
 
         new (&kernel_pagemap) Pagemap();
-        memset(kernel_pagemap.pml4, 0, 0x1000);
+        memset(kernel_pagemap.pml4, 0, PAGE_SIZE);
 
         usize kernel_size = 0;
 
@@ -113,12 +113,12 @@ namespace mem {
     uptr Pagemap::alloc_page_for_page_table() {
         pmm::Page *new_page = pmm::alloc_page();
         page_table_pages_list.add_before(&new_page->link);
-        return new_page->pfn * 0x1000;
+        return new_page->pfn * PAGE_SIZE;
     }
 
     u64* Pagemap::create_next_page_table(u64 *current_entry) {
         uptr new_page = alloc_page_for_page_table();
-        memset((void*)(new_page + hhdm), 0, 0x1000);
+        memset((void*)(new_page + hhdm), 0, PAGE_SIZE);
         *current_entry = new_page | PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER;
         return (u64*)(new_page + hhdm);
     }
@@ -132,9 +132,9 @@ namespace mem {
     }
 
     void Pagemap::map_pages(uptr phy, uptr virt, usize size, u64 flags) {
-        usize num_pages = klib::align_up(size, 0x1000) / 0x1000;
+        usize num_pages = klib::align_up(size, PAGE_SIZE) / PAGE_SIZE;
         for (usize i = 0; i < num_pages; i++)
-            map_page(phy + (i * 0x1000), virt + (i * 0x1000), flags);
+            map_page(phy + (i * PAGE_SIZE), virt + (i * PAGE_SIZE), flags);
     }
 
     void Pagemap::map_kernel() {
@@ -182,20 +182,20 @@ namespace mem {
 
     isize Pagemap::access_memory(uptr virt, void *target, usize count, bool write) {
         uptr start = virt, end = virt + count;
-        uptr start_page_virt = klib::align_down(start, 0x1000);
-        uptr end_page_virt = klib::align_down(end, 0x1000);
+        uptr start_page_virt = klib::align_down(start, PAGE_SIZE);
+        uptr end_page_virt = klib::align_down(end, PAGE_SIZE);
 
         usize transferred = 0;
-        for (uptr page_virt = start_page_virt; page_virt <= end_page_virt; page_virt += 0x1000) {
+        for (uptr page_virt = start_page_virt; page_virt <= end_page_virt; page_virt += PAGE_SIZE) {
             uptr page_ptr = hhdm;
-            usize bytes_in_page = 0x1000;
+            usize bytes_in_page = PAGE_SIZE;
             if (page_virt < start) {
                 usize offset = start - page_virt;
                 page_ptr += offset;
                 bytes_in_page -= offset;
             }
-            if (page_virt + 0x1000 >= end) {
-                bytes_in_page -= page_virt + 0x1000 - end;
+            if (page_virt + PAGE_SIZE >= end) {
+                bytes_in_page -= page_virt + PAGE_SIZE - end;
             }
 
             if (bytes_in_page == 0)
@@ -239,7 +239,7 @@ namespace mem {
     isize Pagemap::handle_page_fault(uptr virt) {
         // klib::SpinlockGuard guard(this->lock);
 
-        uptr page_virt = klib::align_down(virt, 0x1000);
+        uptr page_virt = klib::align_down(virt, PAGE_SIZE);
         u64 *entry = find_page_table_entry(virt, true);
 
         if (!(*entry & PAGE_PRESENT)) {
@@ -253,8 +253,8 @@ namespace mem {
                 new_page->mapped_addr = page_virt;
                 range->page_list.add_before(&new_page->link);
 
-                uptr phy = new_page->pfn * 0x1000;
-                memset((void*)(phy + hhdm), 0, 0x1000);
+                uptr phy = new_page->pfn * PAGE_SIZE;
+                memset((void*)(phy + hhdm), 0, PAGE_SIZE);
                 *entry = phy | range->page_flags;
                 return phy;
             }
@@ -268,12 +268,12 @@ namespace mem {
                 new_page->mapped_addr = page_virt;
                 range->page_list.add_before(&new_page->link);
 
-                uptr phy = new_page->pfn * 0x1000;
+                uptr phy = new_page->pfn * PAGE_SIZE;
                 void *ptr = (void*)(phy + hhdm);
                 usize offset = page_virt - range->base + range->file_offset;
 
-                memset(ptr, 0, 0x1000);
-                range->file->vnode->read(nullptr, ptr, 0x1000, offset);
+                memset(ptr, 0, PAGE_SIZE);
+                range->file->vnode->read(nullptr, ptr, PAGE_SIZE, offset);
 
                 *entry = phy | range->page_flags;
                 return phy;
@@ -289,7 +289,7 @@ namespace mem {
     Pagemap* Pagemap::fork() {
         Pagemap *forked = new Pagemap();
 
-        memcpy(forked->pml4, this->pml4, 0x1000);
+        memcpy(forked->pml4, this->pml4, PAGE_SIZE);
         for (usize i = 256; i < 512; i++) // higher half
             forked->pml4[i] = this->pml4[i];
 
@@ -302,7 +302,7 @@ namespace mem {
             u64 *pml3 = (u64*)((this->pml4[i] & 0x000FFFFFFFFFF000) + hhdm);
 
             uptr new_page = alloc_page_for_page_table();
-            memset((void*)(new_page + hhdm), 0, 0x1000);
+            memset((void*)(new_page + hhdm), 0, PAGE_SIZE);
             forked->pml4[i] = new_page | (pml4[i] & ~0x000FFFFFFFFFF000);
             u64 *forked_pml3 = (u64*)(new_page + hhdm);
 
@@ -315,7 +315,7 @@ namespace mem {
                 u64 *pml2 = (u64*)((pml3[i] & 0x000FFFFFFFFFF000) + hhdm);
 
                 uptr new_page = alloc_page_for_page_table();
-                memset((void*)(new_page + hhdm), 0, 0x1000);
+                memset((void*)(new_page + hhdm), 0, PAGE_SIZE);
                 forked_pml3[i] = new_page | (pml3[i] & ~0x000FFFFFFFFFF000);
                 u64 *forked_pml2 = (u64*)(new_page + hhdm);
 
@@ -328,7 +328,7 @@ namespace mem {
                     u64 *pml1 = (u64*)((pml2[i] & 0x000FFFFFFFFFF000) + hhdm);
 
                     uptr new_page = alloc_page_for_page_table();
-                    memset((void*)(new_page + hhdm), 0, 0x1000);
+                    memset((void*)(new_page + hhdm), 0, PAGE_SIZE);
                     forked_pml2[i] = new_page | (pml2[i] & ~0x000FFFFFFFFFF000);
                     u64 *forked_pml1 = (u64*)(new_page + hhdm);
 
@@ -350,12 +350,12 @@ namespace mem {
                     new_page->mapped_addr = old_page->mapped_addr;
                     new_range->page_list.add_before(&new_page->link);
 
-                    uptr new_phy = new_page->pfn * 0x1000;
-                    uptr old_phy = old_page->pfn * 0x1000;
+                    uptr new_phy = new_page->pfn * PAGE_SIZE;
+                    uptr old_phy = old_page->pfn * PAGE_SIZE;
 
                     // klib::printf("%#lX\n", old_page->mapped_addr);
                     forked->map_page(new_phy, new_page->mapped_addr, new_range->page_flags);
-                    memcpy((void*)(new_phy + hhdm), (void*)(old_phy + hhdm), 0x1000);
+                    memcpy((void*)(new_phy + hhdm), (void*)(old_phy + hhdm), PAGE_SIZE);
                 }
             } else {
                 ASSERT(new_range->type == MappedRange::Type::DIRECT);
@@ -525,16 +525,16 @@ namespace mem {
     }
 
     void Pagemap::invalidate_pages(uptr base, usize length, MappedRange *range) {
-        usize num_pages = klib::align_up(length, 0x1000) / 0x1000;
+        usize num_pages = klib::align_up(length, PAGE_SIZE) / PAGE_SIZE;
         for (usize i = 0; i < num_pages; i++) {
-            uptr virt = base + (i * 0x1000);
+            uptr virt = base + (i * PAGE_SIZE);
             invalidate_page(virt, range);
         }
     }
 
     uptr VMM::virt_alloc(usize length) {
         uptr base = kernel_virt_alloc_base;
-        kernel_virt_alloc_base += klib::align_up(length, 0x1000);
+        kernel_virt_alloc_base += klib::align_up(length, PAGE_SIZE);
         return base;
     }
 
@@ -555,10 +555,10 @@ namespace mem {
         klib::InterruptLock interrupt_guard;
 
         uptr base;
-        usize aligned_size = klib::align_up(length, 0x1000);
+        usize aligned_size = klib::align_up(length, PAGE_SIZE);
         if (flags & MAP_FIXED) {
             base = (uptr)addr;
-            process->mmap_anon_base = klib::align_up(klib::max(process->mmap_anon_base, base + aligned_size), 0x1000);
+            process->mmap_anon_base = klib::align_up(klib::max(process->mmap_anon_base, base + aligned_size), PAGE_SIZE);
         } else {
             base = process->mmap_anon_base;
             process->mmap_anon_base += aligned_size;
@@ -586,9 +586,9 @@ namespace mem {
         log_syscall("munmap(%#lX, %#lX)\n", (uptr)addr, length);
         sched::Process *process = cpu::get_current_thread()->process;
 
-        if ((uptr)addr % 0x1000 != 0)
+        if ((uptr)addr % PAGE_SIZE != 0)
             return -EINVAL;
-        length = klib::align_up(length, 0x1000);
+        length = klib::align_up(length, PAGE_SIZE);
 
         klib::InterruptLock interrupt_guard;
 
@@ -603,9 +603,9 @@ namespace mem {
         log_syscall("mprotect(%#lX, %#lX, %d)\n", (uptr)addr, length, prot);
         sched::Process *process = cpu::get_current_thread()->process;
 
-        if ((uptr)addr % 0x1000 != 0)
+        if ((uptr)addr % PAGE_SIZE != 0)
             return -EINVAL;
-        length = klib::align_up(length, 0x1000);
+        length = klib::align_up(length, PAGE_SIZE);
 
         klib::InterruptLock interrupt_guard;
 
@@ -618,15 +618,15 @@ namespace mem {
         log_syscall("mincore(%#lX, %#lX, %#lX)\n", (uptr)addr, length, (uptr)vec);
         sched::Process *process = cpu::get_current_thread()->process;
 
-        if ((uptr)addr % 0x1000 != 0)
+        if ((uptr)addr % PAGE_SIZE != 0)
             return -EINVAL;
-        length = klib::align_up(length, 0x1000);
-        usize num_pages = length / 0x1000;
+        length = klib::align_up(length, PAGE_SIZE);
+        usize num_pages = length / PAGE_SIZE;
 
         klib::InterruptLock interrupt_guard;
 
         for (usize i = 0; i < num_pages; i++) {
-            uptr page = (uptr)addr + i * 0x1000;
+            uptr page = (uptr)addr + i * PAGE_SIZE;
             MappedRange *range = process->pagemap->addr_to_range(page);
             if (range == nullptr)
                 return -ENOMEM;
@@ -639,9 +639,9 @@ namespace mem {
         log_syscall("madvise(%#lX, %#lX, %d)\n", (uptr)addr, length, advice);
         sched::Process *process = cpu::get_current_thread()->process;
 
-        if ((uptr)addr % 0x1000 != 0)
+        if ((uptr)addr % PAGE_SIZE != 0)
             return -EINVAL;
-        length = klib::align_up(length, 0x1000);
+        length = klib::align_up(length, PAGE_SIZE);
 
         klib::InterruptLock interrupt_guard;
 
@@ -655,9 +655,9 @@ namespace mem {
             return 0; // these operations are safe to ignore
         case MADV_FREE: // FIXME: not actually equivalent
         case MADV_DONTNEED: {
-            usize num_pages = length / 0x1000;
+            usize num_pages = length / PAGE_SIZE;
             for (usize i = 0; i < num_pages; i++) {
-                uptr page = (uptr)addr + i * 0x1000;
+                uptr page = (uptr)addr + i * PAGE_SIZE;
                 process->pagemap->invalidate_page(page);
             }
         } return 0;

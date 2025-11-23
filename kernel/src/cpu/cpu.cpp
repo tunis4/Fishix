@@ -10,7 +10,7 @@ namespace cpu {
     extern "C" void __syscall_entry();
 
     // const usize stack_size = 0x10000; // 64 KiB
-    const usize stack_size = 0x1000; // FIXME: too small but i cant allocate contigous physical memory 
+    const usize stack_size = PAGE_SIZE; // FIXME: too small but i cant allocate contigous physical memory 
 
     static CPU bsp_cpu;
 
@@ -84,10 +84,10 @@ namespace cpu {
 
         load_tss(&cpu->tss);
 
-        uptr int_stack_phy = pmm::alloc_pages(stack_size / 0x1000);
+        uptr int_stack_phy = pmm::alloc_pages(stack_size / PAGE_SIZE);
         cpu->tss.rsp0 = int_stack_phy + stack_size + mem::hhdm;
 
-        uptr sched_stack_phy = pmm::alloc_pages(stack_size / 0x1000);
+        uptr sched_stack_phy = pmm::alloc_pages(stack_size / PAGE_SIZE);
         cpu->tss.ist1 = sched_stack_phy + stack_size + mem::hhdm;
 
         // hardcode PAT

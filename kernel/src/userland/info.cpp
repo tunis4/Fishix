@@ -42,7 +42,7 @@ namespace userland {
         info->procs = 0;
         info->totalhigh = 0;
         info->freehigh = 0;
-        info->mem_unit = 0x1000;
+        info->mem_unit = PAGE_SIZE;
         return 0;
     }
 }

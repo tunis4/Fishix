@@ -228,7 +228,7 @@ namespace net {
     }
 
     LoopbackInterface::LoopbackInterface() {
-        mtu = 0x1000 - sizeof(EthHeader);
+        mtu = PAGE_SIZE - sizeof(EthHeader);
 
         this->ipv4 = Ipv4(127, 0, 0, 1);
         add_route(Route {

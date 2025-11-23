@@ -91,7 +91,7 @@ namespace dev::virtio {
         descriptor_array = (Descriptor*)addr;
         available_ring = (AvailableRing*)((uptr)descriptor_array + length * sizeof(Descriptor));
         used_ring = (UsedRing*)((uptr)available_ring + sizeof(AvailableRing) + sizeof(u16) * length);
-        memset((void*)addr, 0, 0x1000);
+        memset((void*)addr, 0, PAGE_SIZE);
 
         for (usize i = 0; i < length; i++)
             descriptor_array[i].next = i + 1;
@@ -139,7 +139,7 @@ namespace dev::virtio {
         add_queue(&queue, 0);
 
         requests_page = pmm::alloc_page();
-        usize num_requests = 0x1000 / sizeof(Request);
+        usize num_requests = PAGE_SIZE / sizeof(Request);
         Request *requests = (Request*)(requests_page->phy() + mem::hhdm);
         first_free_request = &requests[0];
         for (usize i = 0; i < num_requests; i++) {
@@ -228,7 +228,7 @@ namespace dev::virtio {
         if (desc2 == queue.length) return err = -ENOMEM;
         defer { if (err < 0) queue.free_descriptor(desc2); };
         descriptors[desc2].address = page_phy;
-        descriptors[desc2].length = 0x1000;
+        descriptors[desc2].length = PAGE_SIZE;
         descriptors[desc2].flags = Queue::Descriptor::FLAG_NEXT | (direction == WRITE ? 0 : Queue::Descriptor::FLAG_DEVICE_WRITE);
 
         u16 desc3 = queue.alloc_descriptor();
@@ -286,7 +286,7 @@ namespace dev::virtio {
         common_cfg.write<u32>(CommonCfg::DEVICE_STATUS, common_cfg.read<u32>(CommonCfg::DEVICE_STATUS) | DeviceStatus::DRIVER_OK);
         mmio::sync();
 
-        constexpr usize buffer_size = 0x1000;
+        constexpr usize buffer_size = PAGE_SIZE;
         while (true) {
             u16 desc = rx_queue.alloc_descriptor();
             if (desc == rx_queue.length)

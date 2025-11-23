@@ -24,20 +24,20 @@ namespace pmm {
 
         stats.total_pages_usable = stats.total_free_pages;
 
-        klib::printf("PMM: %ld page structs created, representing %ld KiB (%ld MiB) of usable memory\n", stats.total_free_pages, stats.total_free_pages * 0x1000 / 1024, stats.total_free_pages * 0x1000 / 1024 / 1024);
-        klib::printf("PMM: %ld pages (%ld KiB) reserved for storing page structs\n", stats.total_pages_reserved, stats.total_pages_reserved * 0x1000 / 1024);
+        klib::printf("PMM: %ld page structs created, representing %ld KiB (%ld MiB) of usable memory\n", stats.total_free_pages, stats.total_free_pages * PAGE_SIZE / 1024, stats.total_free_pages * PAGE_SIZE / 1024 / 1024);
+        klib::printf("PMM: %ld pages (%ld KiB) reserved for storing page structs\n", stats.total_pages_reserved, stats.total_pages_reserved * PAGE_SIZE / 1024);
     }
 
     void absorb_memmap_entry(uptr hhdm, limine_memmap_entry *entry) {            
-        usize pfn_start = entry->base / 0x1000;
-        usize pfn_end = entry->base / 0x1000 + entry->length / 0x1000;
-        if (entry->base % 0x1000)
+        usize pfn_start = entry->base / PAGE_SIZE;
+        usize pfn_end = entry->base / PAGE_SIZE + entry->length / PAGE_SIZE;
+        if (entry->base % PAGE_SIZE)
             pfn_start++;
-        if (entry->length % 0x1000)
+        if (entry->length % PAGE_SIZE)
             pfn_end--;
         usize num_pages = pfn_end - pfn_start;
 
-        uptr ptr = pfn_start * 0x1000 + hhdm;
+        uptr ptr = pfn_start * PAGE_SIZE + hhdm;
         Region *region = (Region*)ptr;
         ptr += sizeof(Region);
         region->num_pages = num_pages;
@@ -67,7 +67,7 @@ namespace pmm {
         Page *page = alloc_page();
         pmm_lock.lock();
 
-        auto *entry = (limine_memmap_entry*)(page->pfn * 0x1000);
+        auto *entry = (limine_memmap_entry*)(page->pfn * PAGE_SIZE);
         usize num_entries = 0;
         for (usize e = 0; e < memmap_res->entry_count; e++) {
             if (memmap_res->entries[e]->type != LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE)
@@ -75,7 +75,7 @@ namespace pmm {
             
             memcpy(&entry[num_entries], memmap_res->entries[e], sizeof(limine_memmap_entry));
             num_entries++;
-            if (num_entries >= 0x1000 / sizeof(limine_memmap_entry))
+            if (num_entries >= PAGE_SIZE / sizeof(limine_memmap_entry))
                 break;
         }
 
@@ -86,7 +86,7 @@ namespace pmm {
         free_page(page);
 
         usize num_reclaimed_pages = stats.total_free_pages - previous_free_pages;
-        klib::printf("PMM: Reclaimed %ld pages (%ld KiB) of bootloader memory\n", num_reclaimed_pages, num_reclaimed_pages * 0x1000 / 1024);
+        klib::printf("PMM: Reclaimed %ld pages (%ld KiB) of bootloader memory\n", num_reclaimed_pages, num_reclaimed_pages * PAGE_SIZE / 1024);
     }
 
     Page* find_page(uptr phy) {
@@ -95,7 +95,7 @@ namespace pmm {
             if (phy < region->base_phy() || phy > region->end_phy())
                 continue;
 
-            usize offset_pages = (phy - region->base_phy()) / 0x1000;
+            usize offset_pages = (phy - region->base_phy()) / PAGE_SIZE;
             if (offset_pages < region->num_pages_reserved())
                 return nullptr;
 

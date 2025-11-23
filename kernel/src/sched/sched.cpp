@@ -334,7 +334,7 @@ namespace sched {
         };
 
         process->pagemap = new mem::Pagemap();
-        memset(process->pagemap->pml4, 0, 0x1000);
+        memset(process->pagemap->pml4, 0, PAGE_SIZE);
         process->pagemap->map_kernel();
         process->mmap_anon_base = 0;
 
@@ -488,7 +488,7 @@ namespace sched {
         stack -= 2; stack[0] = AT_PHNUM;  stack[1] = auxv.at_phnum;
         stack -= 2; stack[0] = AT_PHENT;  stack[1] = auxv.at_phent;
         stack -= 2; stack[0] = AT_PHDR;   stack[1] = auxv.at_phdr;
-        stack -= 2; stack[0] = AT_PAGESZ; stack[1] = 0x1000;
+        stack -= 2; stack[0] = AT_PAGESZ; stack[1] = PAGE_SIZE;
         
         *(--stack) = 0; // null terminator for envp
         stack -= envp_len;

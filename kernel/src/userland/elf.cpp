@@ -40,24 +40,24 @@ namespace elf {
                 //     page_flags |= PAGE_NO_EXECUTE;
 
                 usize misalign = ph.virt_addr & 0xFFF;
-                usize mem_page_count = (ph.mem_size + misalign + 0x1000 - 1) / 0x1000;
-                usize file_page_count = (ph.file_size + misalign + 0x1000 - 1) / 0x1000;
+                usize mem_page_count = (ph.mem_size + misalign + PAGE_SIZE - 1) / PAGE_SIZE;
+                usize file_page_count = (ph.file_size + misalign + PAGE_SIZE - 1) / PAGE_SIZE;
                 usize total_read_from_file = 0;
 
                 uptr base = load_base + ph.virt_addr;
-                uptr aligned_base = klib::align_down(base, 0x1000);
+                uptr aligned_base = klib::align_down(base, PAGE_SIZE);
                 file_virt_base = klib::min(file_virt_base, base);
 
-                // klib::printf("mapping %#lX length %#lX\n", aligned_base, mem_page_count * 0x1000);
-                pagemap->map_anonymous(aligned_base, mem_page_count * 0x1000, page_flags);
+                // klib::printf("mapping %#lX length %#lX\n", aligned_base, mem_page_count * PAGE_SIZE);
+                pagemap->map_anonymous(aligned_base, mem_page_count * PAGE_SIZE, page_flags);
 
                 for (usize i = 0; i < mem_page_count; i++) {
-                    uptr page_virt = base + (i * 0x1000);
-                    uptr dst = aligned_base + (i * 0x1000);
-                    memset((void*)dst, 0, 0x1000);
+                    uptr page_virt = base + (i * PAGE_SIZE);
+                    uptr dst = aligned_base + (i * PAGE_SIZE);
+                    memset((void*)dst, 0, PAGE_SIZE);
                     if (i < file_page_count) {
-                        uptr offset = ph.offset + (i * 0x1000);
-                        uptr size = 0x1000;
+                        uptr offset = ph.offset + (i * PAGE_SIZE);
+                        uptr size = PAGE_SIZE;
                         if (i == 0) {
                             dst += misalign;
                             size -= misalign;
@@ -71,7 +71,7 @@ namespace elf {
                         total_read_from_file += size;
                     }
                     if (page_virt >= *first_free_virt)
-                        *first_free_virt = page_virt + 0x1000;
+                        *first_free_virt = page_virt + PAGE_SIZE;
                 }
 
                 ASSERT(total_read_from_file == ph.file_size);
@@ -91,7 +91,7 @@ namespace elf {
             }
         }
 
-        *first_free_virt = klib::align_up(*first_free_virt, 0x1000);
+        *first_free_virt = klib::align_up(*first_free_virt, PAGE_SIZE);
 
         auxv->at_entry = load_base + header.entry_addr;
         auxv->at_phent = header.ph_entry_size;

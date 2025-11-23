@@ -47,8 +47,8 @@ namespace tmpfs {
             statbuf->st_size = sizeof(vfs::Entry);
         else
             statbuf->st_size = node_data->size;
-        statbuf->st_blksize = 4096;
-        statbuf->st_blocks = (statbuf->st_size + 4095) / 4096;
+        statbuf->st_blksize = PAGE_SIZE;
+        statbuf->st_blocks = (statbuf->st_size + PAGE_SIZE - 1) / PAGE_SIZE;
         statbuf->st_nlink = 2; // FIXME: hack for useradd
     }
 
@@ -56,8 +56,8 @@ namespace tmpfs {
         buf->f_type = TMPFS_MAGIC;
         *(u64*)&buf->f_fsid = 0x21948930289035;
         buf->f_namelen = 255;
-        buf->f_bsize = 0x1000;
-        buf->f_frsize = 0x1000;
+        buf->f_bsize = PAGE_SIZE;
+        buf->f_frsize = PAGE_SIZE;
         buf->f_blocks = pmm::stats.total_pages_usable;
         buf->f_bfree = pmm::stats.total_free_pages;
         buf->f_bavail = pmm::stats.total_free_pages;

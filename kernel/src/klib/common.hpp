@@ -1,9 +1,9 @@
 #pragma once
 
-#define __MLIBC_ABI_ONLY
-
 #include <stdint.h>
 #include <stddef.h>
+
+#define PAGE_SIZE 0x1000
 
 #define alloca(type, count) (type*)__builtin_alloca(count * sizeof(type));
 

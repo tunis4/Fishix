@@ -14,7 +14,7 @@ namespace pmm {
         u64 pfn : 63; // page frame number (the physical address of the page >> 12)
         uptr mapped_addr; // virtual address that it is mapped to if this is anonymous memory
 
-        inline uptr phy() const { return pfn * 0x1000; }
+        inline uptr phy() const { return pfn * PAGE_SIZE; }
 
         template<typename T>
         inline T* as() const { return (T*)(phy() + mem::hhdm); }
@@ -27,8 +27,8 @@ namespace pmm {
         usize padding;
 
         inline usize base_phy() const { return (uptr)this - mem::hhdm; }
-        inline usize end_phy() const { return base_phy() + num_pages * 0x1000; }
-        inline usize num_pages_reserved() const { return (sizeof(Region) + num_pages * sizeof(Page) + 0x1000 - 1) / 0x1000; }
+        inline usize end_phy() const { return base_phy() + num_pages * PAGE_SIZE; }
+        inline usize num_pages_reserved() const { return (sizeof(Region) + num_pages * sizeof(Page) + PAGE_SIZE - 1) / PAGE_SIZE; }
         inline usize num_pages_usable() const { return num_pages - num_pages_reserved(); }
         inline Page* pages_array() const { return (Page*)((uptr)this + sizeof(Region)); }
     };

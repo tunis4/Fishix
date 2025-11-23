@@ -15,7 +15,7 @@ namespace socket {
         };
 
         using DatagramRingBuffer = klib::RingBuffer<Datagram*, 256>;
-        using StreamRingBuffer = klib::RingBuffer<u8, 32 * 0x1000>;
+        using StreamRingBuffer = klib::RingBuffer<u8, 128 * 1024>;
 
         sched::Event socket_event;
         // DatagramRingBuffer *datagram_ring_buffer = nullptr;

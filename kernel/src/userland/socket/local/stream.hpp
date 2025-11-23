@@ -6,7 +6,7 @@
 namespace socket {
     // also implements SOCK_SEQPACKET
     struct LocalStreamSocket final : public Socket {
-        using RingBuffer = klib::RingBuffer<u8, 52 * 0x1000>;
+        using RingBuffer = klib::RingBuffer<u8, 208 * 1024>;
 
         sched::Event socket_event;
         RingBuffer *ring_buffer = nullptr;

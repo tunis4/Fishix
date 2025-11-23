@@ -20,8 +20,8 @@ namespace cpu::syscall {
     static void *syscall_table[syscall_table_size] = {};
     static const char *syscall_name_table[syscall_table_size] = {};
 
-#if SYSCALL_TRACE
-    static constexpr int min_tid = 150;
+#if SYSCALL_TRACE || UNIMPLEMENTED_SYSCALL_TRACE
+    static constexpr int min_tid = 0;
 #endif
 
     static bool should_trace_syscall(usize num) {

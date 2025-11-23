@@ -9,7 +9,7 @@ namespace dev {
     klib::Awaitable<isize> BlockInterface::read_write_blocks(uptr buffer, usize block_count, usize first_block, Direction direction) {
         auto *pagemap = mem::vmm->active_pagemap;
         for (usize i = 0; i < block_count; i++) {
-            isize phy = pagemap->get_physical_addr(buffer + i * 0x1000);
+            isize phy = pagemap->get_physical_addr(buffer + i * PAGE_SIZE);
             if (phy < 0)
                 co_return phy;
             if (isize err = co_await read_write_block(first_block + i, phy, direction); err < 0)
@@ -24,17 +24,17 @@ namespace dev {
         uptr buf_virt = (uptr)buf;
 
         // read/write partial block at the beginning
-        if (buf_virt % 0x1000) {
+        if (buf_virt % PAGE_SIZE) {
             pmm::Page *tmp_page = pmm::alloc_page();
             defer { pmm::free_page(tmp_page); };
             uptr tmp_phy = tmp_page->phy();
 
-            if (isize err = co_await read_write_block(offset / 0x1000, tmp_phy, direction); err < 0)
+            if (isize err = co_await read_write_block(offset / PAGE_SIZE, tmp_phy, direction); err < 0)
                 co_return err;
 
             auto *old_pagemap = mem::vmm->active_pagemap;
             pagemap->activate();
-            usize copy_size = klib::min(0x1000 - (buf_virt % 0x1000), count);
+            usize copy_size = klib::min(PAGE_SIZE - (buf_virt % PAGE_SIZE), count);
             if (direction == READ)
                 memcpy((void*)buf_virt, (void*)(tmp_phy + mem::hhdm), copy_size);
             else
@@ -50,11 +50,11 @@ namespace dev {
             co_return done_count;
 
         // read/write full blocks in the middle
-        ASSERT(buf_virt % 0x1000 == 0);
-        usize num_full_blocks = count / 0x1000;
+        ASSERT(buf_virt % PAGE_SIZE == 0);
+        usize num_full_blocks = count / PAGE_SIZE;
         if (num_full_blocks > 0) {
-            usize read_size = num_full_blocks * 0x1000;
-            if (isize err = co_await read_write_blocks(buf_virt, num_full_blocks, offset / 0x1000, direction); err < 0)
+            usize read_size = num_full_blocks * PAGE_SIZE;
+            if (isize err = co_await read_write_blocks(buf_virt, num_full_blocks, offset / PAGE_SIZE, direction); err < 0)
                 co_return err;
             count -= read_size;
             buf_virt += read_size;
@@ -65,17 +65,17 @@ namespace dev {
             co_return done_count;
 
         // read/write partial block at the end
-        ASSERT(buf_virt % 0x1000 == 0);
+        ASSERT(buf_virt % PAGE_SIZE == 0);
         pmm::Page *tmp_page = pmm::alloc_page();
         defer { pmm::free_page(tmp_page); };
         uptr tmp_phy = tmp_page->phy();
 
-        if (isize err = co_await read_write_block(offset / 0x1000, tmp_phy, direction); err < 0)
+        if (isize err = co_await read_write_block(offset / PAGE_SIZE, tmp_phy, direction); err < 0)
             co_return err;
 
         auto *old_pagemap = mem::vmm->active_pagemap;
         pagemap->activate();
-        usize copy_size = klib::min(count, (usize)0x1000);
+        usize copy_size = klib::min(count, (usize)PAGE_SIZE);
         if (direction == READ)
             memcpy((void*)buf_virt, (void*)(tmp_phy + mem::hhdm), copy_size);
         else

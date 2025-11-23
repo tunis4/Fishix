@@ -55,8 +55,8 @@ namespace procfs {
             statbuf->st_size = sizeof(vfs::Entry);
         else
             statbuf->st_size = node_data->size;
-        statbuf->st_blksize = 4096;
-        statbuf->st_blocks = (statbuf->st_size + 4095) / 4096;
+        statbuf->st_blksize = PAGE_SIZE;
+        statbuf->st_blocks = (statbuf->st_size + PAGE_SIZE - 1) / PAGE_SIZE;
         statbuf->st_nlink = 1;
     }
 
@@ -64,8 +64,8 @@ namespace procfs {
         buf->f_type = PROC_SUPER_MAGIC;
         *(u64*)&buf->f_fsid = 0x1700000000;
         buf->f_namelen = 255;
-        buf->f_bsize = 0x1000;
-        buf->f_frsize = 0x1000;
+        buf->f_bsize = PAGE_SIZE;
+        buf->f_frsize = PAGE_SIZE;
         buf->f_flags = ST_NOSUID | ST_NODEV | ST_NOEXEC | ST_RELATIME;
     }
 
@@ -221,9 +221,9 @@ namespace procfs {
             auto print_value = [&] (const char *name, usize value) {
                 info_node_printf("%s%8lu kB\n", name, value / 1024);
             };
-            print_value("MemTotal:       ", pmm::stats.total_pages_usable * 0x1000);
-            print_value("MemFree:        ", pmm::stats.total_free_pages * 0x1000);
-            print_value("MemAvailable:   ", pmm::stats.total_free_pages * 0x1000);
+            print_value("MemTotal:       ", pmm::stats.total_pages_usable * PAGE_SIZE);
+            print_value("MemFree:        ", pmm::stats.total_free_pages * PAGE_SIZE);
+            print_value("MemAvailable:   ", pmm::stats.total_free_pages * PAGE_SIZE);
             print_value("Buffers:        ", 0);
             print_value("Cached:         ", 0);
             print_value("SwapCached:     ", 0);
