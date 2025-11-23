@@ -51,6 +51,7 @@ namespace sched {
         SignalFrame *signal_frame = nullptr; // only valid when exiting signal
         u64 poll_saved_signal_mask = 0; // only valid when poll is called with a signal mask
         bool has_poll_saved_signal_mask = false;
+        Event signal_event;
 
         // used for SA_RESTART
         usize last_syscall_num;

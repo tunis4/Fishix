@@ -142,6 +142,8 @@ SYSCALL(userland, inotify_add_watch);
 SYSCALL(userland, inotify_rm_watch);
 SYSCALL(userland, eventfd);
 SYSCALL(userland, eventfd2);
+SYSCALL(userland, signalfd);
+SYSCALL(userland, signalfd4);
 SYSCALL(  socket, socket);
 SYSCALL(  socket, socketpair);
 SYSCALL(  socket, bind);

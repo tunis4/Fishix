@@ -13,6 +13,7 @@
 #include <userland/epoll.hpp>
 #include <userland/inotify.hpp>
 #include <userland/eventfd.hpp>
+#include <userland/signalfd.hpp>
 #include <sys/syscall.h>
 
 namespace cpu::syscall {

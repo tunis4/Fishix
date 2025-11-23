@@ -83,7 +83,10 @@ namespace sched {
         return file_descriptors.size() - 1;
     }
 
-    Thread::Thread(Process *process, int tid) : tid(tid), process(process) {
+    Thread::Thread(Process *process, int tid) :
+        tid(tid), process(process),
+        signal_event("Thread::signal_event")
+    {
         process->thread_list.add_before(&thread_link);
         process->num_living_threads++;
         get_thread_table()[tid] = this;
@@ -137,6 +140,7 @@ namespace sched {
             klib::printf("send_signal: real-time signals not supported correctly (signal %d)\n", signal);
         pending_signals |= userland::get_signal_bit(signal);
         enqueue_thread(this, signal);
+        signal_event.trigger();
     }
 
     bool Thread::has_pending_signals() {

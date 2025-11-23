@@ -29,7 +29,8 @@ namespace vfs {
         SOCKET,
         EPOLL,
         INOTIFY,
-        EVENTFD
+        EVENTFD,
+        SIGNALFD,
     };
     static constexpr inline bool is_special(NodeType type) { return type != NodeType::REGULAR && type != NodeType::DIRECTORY; }
     static constexpr inline bool is_device(NodeType type) { return type == NodeType::CHAR_DEVICE && type != NodeType::BLOCK_DEVICE; }
