@@ -79,4 +79,16 @@ namespace klib {
                 return (char*)(str - 1);
         return nullptr;
     }
+
+    usize string_copy(char *dst, const char *src, usize dst_size) {
+        usize i;
+        for (i = 0; i < dst_size && src[i] != '\0'; i++)
+            dst[i] = src[i];
+
+        if (i == dst_size)
+            dst[dst_size - 1] = '\0';
+        else
+            dst[i] = '\0';
+        return i;
+    }
 }

@@ -315,8 +315,7 @@ namespace vfs {
             }
         } else {
             Entry *starting_point = nullptr;
-            if (isize err = get_starting_point(&starting_point, fd, path); err < 0)
-                return err;
+            check(get_starting_point(&starting_point, fd, path));
             Entry *result = path_to_entry(path, starting_point, (flags & AT_SYMLINK_NOFOLLOW) == 0);
             if (result->vnode == nullptr)
                 return -ENOENT;
@@ -340,8 +339,7 @@ namespace vfs {
         sched::Thread *thread = cpu::get_current_thread();
         sched::Process *process = thread->process;
         Entry *starting_point = nullptr;
-        if (isize err = get_starting_point(&starting_point, dirfd, path); err < 0)
-            return err;
+        check(get_starting_point(&starting_point, dirfd, path));
         Entry *entry = path_to_entry(path, starting_point, !(flags & O_NOFOLLOW));
 
         bool should_truncate = false;
@@ -391,18 +389,21 @@ namespace vfs {
         return fd;
     }
 
-    isize syscall_openat(int dirfd, const char *path, int flags, mode_t mode) {
-        log_syscall("openat(%d, \"%s\", %#o, %#o)\n", dirfd, path, flags, mode);
+    isize syscall_openat(int dirfd, UserStr u_path, int flags, mode_t mode) {
+        get_user_path(path);
+        log_syscall("openat(%d, \"%s\", %#o, %#o)\n", dirfd, (const char*)path, flags, mode);
         return openat_impl(dirfd, path, flags, mode);
     }
 
-    isize syscall_open(const char *path, int flags, mode_t mode) {
-        log_syscall("open(\"%s\", %#o, %#o)\n", path, flags, mode);
+    isize syscall_open(UserStr u_path, int flags, mode_t mode) {
+        get_user_path(path);
+        log_syscall("open(\"%s\", %#o, %#o)\n", (const char*)path, flags, mode);
         return openat_impl(AT_FDCWD, path, flags, mode);
     }
 
-    isize syscall_creat(const char *path, mode_t mode) {
-        log_syscall("creat(\"%s\", %#o)\n", path, mode);
+    isize syscall_creat(UserStr u_path, mode_t mode) {
+        get_user_path(path);
+        log_syscall("creat(\"%s\", %#o)\n", (const char*)path, mode);
         return openat_impl(AT_FDCWD, path, O_CREAT | O_WRONLY | O_TRUNC, mode);
     }
 
@@ -446,8 +447,7 @@ namespace vfs {
 
     static isize mkdirat_impl(int dirfd, const char *path, mode_t mode) {
         Entry *starting_point = nullptr;
-        if (isize err = get_starting_point(&starting_point, dirfd, path); err < 0)
-            return err;
+        check(get_starting_point(&starting_point, dirfd, path));
         Entry *entry = path_to_entry(path, starting_point);
         if (entry->vnode != nullptr)
             return -EEXIST;
@@ -458,13 +458,15 @@ namespace vfs {
         return 0;
     }
 
-    isize syscall_mkdirat(int dirfd, const char *path, mode_t mode) {
-        log_syscall("mkdirat(%d, \"%s\", %#o)\n", dirfd, path, mode);
+    isize syscall_mkdirat(int dirfd, UserStr u_path, mode_t mode) {
+        get_user_path(path);
+        log_syscall("mkdirat(%d, \"%s\", %#o)\n", dirfd, (const char*)path, mode);
         return mkdirat_impl(dirfd, path, mode);
     }
 
-    isize syscall_mkdir(const char *path, mode_t mode) {
-        log_syscall("mkdir(\"%s\", %#o)\n", path, mode);
+    isize syscall_mkdir(UserStr u_path, mode_t mode) {
+        get_user_path(path);
+        log_syscall("mkdir(\"%s\", %#o)\n", (const char*)path, mode);
         return mkdirat_impl(AT_FDCWD, path, mode);
     }
 
@@ -549,22 +551,26 @@ namespace vfs {
         return ret;
     }
 
-    isize syscall_getcwd(char *buf, usize size) {
-        log_syscall("getcwd(%#lX, %ld)\n", (uptr)buf, size);
+    isize syscall_getcwd(UserPtr<char> u_buf, usize size) {
+        klib::UserBuffer<char, PATH_MAX> buffer;
+        log_syscall("getcwd(%#lX, %ld)\n", (uptr)u_buf, size);
         sched::Process *process = cpu::get_current_thread()->process;
         usize written = 0;
         process->cwd->print_path([&] (char c) {
             if (written + 1 < size)
-                buf[written++] = c;
+                buffer[written++] = c;
         });
+        if (written + 1 > PATH_MAX)
+            return -ENAMETOOLONG;
         if (written + 1 >= size)
             return -ERANGE;
-        buf[written] = '\0';
-        return 0;
+        buffer[written] = '\0';
+        return buffer.to(u_buf, written + 1);
     }
 
-    isize syscall_chdir(const char *path) {
-        log_syscall("chdir(\"%s\")\n", path);
+    isize syscall_chdir(UserStr u_path) {
+        get_user_path(path);
+        log_syscall("chdir(\"%s\")\n", (const char*)path);
         sched::Process *process = cpu::get_current_thread()->process;
         Entry *entry = path_to_entry(path, process->cwd);
         if (entry->vnode == nullptr)
@@ -598,8 +604,7 @@ namespace vfs {
 
     static isize unlinkat_impl(int dirfd, const char *path, int flags) {
         Entry *starting_point = nullptr;
-        if (isize err = get_starting_point(&starting_point, dirfd, path); err < 0)
-            return err;
+        check(get_starting_point(&starting_point, dirfd, path));
         Entry *entry = path_to_entry(path, starting_point);
         if (entry->vnode == nullptr)
             return -ENOENT;
@@ -609,18 +614,21 @@ namespace vfs {
         return 0;
     }
 
-    isize syscall_unlinkat(int dirfd, const char *path, int flags) {
-        log_syscall("unlinkat(%d, \"%s\", %d)\n", dirfd, path, flags);
+    isize syscall_unlinkat(int dirfd, UserStr u_path, int flags) {
+        get_user_path(path);
+        log_syscall("unlinkat(%d, \"%s\", %d)\n", dirfd, (const char*)path, flags);
         return unlinkat_impl(dirfd, path, flags);
     }
 
-    isize syscall_unlink(const char *path) {
-        log_syscall("unlink(\"%s\")\n", path);
+    isize syscall_unlink(UserStr u_path) {
+        get_user_path(path);
+        log_syscall("unlink(\"%s\")\n", (const char*)path);
         return unlinkat_impl(AT_FDCWD, path, 0);
     }
 
-    isize syscall_rmdir(const char *path) {
-        log_syscall("rmdir(\"%s\")\n", path);
+    isize syscall_rmdir(UserStr u_path) {
+        get_user_path(path);
+        log_syscall("rmdir(\"%s\")\n", (const char*)path);
         return unlinkat_impl(AT_FDCWD, path, AT_REMOVEDIR);
     }
 
@@ -716,84 +724,88 @@ namespace vfs {
         return dup3_impl(oldfd, newfd, flags);
     }
 
-    static isize fstatat_impl(int fd, const char *path, struct stat *statbuf, int flags) {
-        VNode *vnode;
-        if (isize err = get_vnode_from_dirfd_path(&vnode, fd, path, flags); err < 0)
-            return err;
+    static isize fstatat_impl(int fd, const char *path, UserPtr<struct stat> u_statbuf, int flags) {
+        klib::UserBuffer<struct stat> statbuf;
+        struct stat *stat = statbuf;
 
-        memset(statbuf, 0, sizeof(struct stat));
-        statbuf->st_mode = vnode->mode & ~MODE_TYPE_MASK;
+        VNode *vnode;
+        check(get_vnode_from_dirfd_path(&vnode, fd, path, flags));
+
+        memset(stat, 0, sizeof(struct stat));
+        stat->st_mode = vnode->mode & ~MODE_TYPE_MASK;
         switch (vnode->node_type) {
-        case NodeType::REGULAR:      statbuf->st_mode |= S_IFREG; break;
-        case NodeType::DIRECTORY:    statbuf->st_mode |= S_IFDIR; break;
-        case NodeType::BLOCK_DEVICE: statbuf->st_mode |= S_IFBLK; break;
-        case NodeType::CHAR_DEVICE:  statbuf->st_mode |= S_IFCHR; break;
-        case NodeType::SYMLINK:      statbuf->st_mode |= S_IFLNK; break;
-        case NodeType::FIFO:         statbuf->st_mode |= S_IFIFO; break;
-        case NodeType::SOCKET:       statbuf->st_mode |= S_IFSOCK; break;
+        case NodeType::REGULAR:      stat->st_mode |= S_IFREG; break;
+        case NodeType::DIRECTORY:    stat->st_mode |= S_IFDIR; break;
+        case NodeType::BLOCK_DEVICE: stat->st_mode |= S_IFBLK; break;
+        case NodeType::CHAR_DEVICE:  stat->st_mode |= S_IFCHR; break;
+        case NodeType::SYMLINK:      stat->st_mode |= S_IFLNK; break;
+        case NodeType::FIFO:         stat->st_mode |= S_IFIFO; break;
+        case NodeType::SOCKET:       stat->st_mode |= S_IFSOCK; break;
         default: klib::printf("stat: unsupported node type %d\n", int(vnode->node_type));
         }
 
         if (vnode->fs) {
-            statbuf->st_dev = vnode->fs->dev_id;
+            stat->st_dev = vnode->fs->dev_id;
         } else {
             static dev_t pipe_dev_id = dev::make_dev_id(0, non_device_dev_id++);
             static dev_t socket_dev_id = dev::make_dev_id(0, non_device_dev_id++);
 
             switch (vnode->node_type) {
-            case NodeType::FIFO: statbuf->st_dev = pipe_dev_id; break;
-            case NodeType::SOCKET: statbuf->st_dev = socket_dev_id; break;
+            case NodeType::FIFO: stat->st_dev = pipe_dev_id; break;
+            case NodeType::SOCKET: stat->st_dev = socket_dev_id; break;
             default:
                 klib::printf("stat: unsupported node type\n");
-                statbuf->st_dev = dev::make_dev_id(0, 0);
+                stat->st_dev = dev::make_dev_id(0, 0);
             }
         }
 
-        statbuf->st_uid = vnode->uid;
-        statbuf->st_gid = vnode->gid;
+        stat->st_uid = vnode->uid;
+        stat->st_gid = vnode->gid;
         if (is_device(vnode->node_type))
-            statbuf->st_rdev = ((dev::DevNode*)vnode)->dev_id;
-        statbuf->st_atim = vnode->access_time.to_posix();
-        statbuf->st_mtim = vnode->modification_time.to_posix();
-        statbuf->st_ctim = vnode->creation_time.to_posix();
+            stat->st_rdev = ((dev::DevNode*)vnode)->dev_id;
+        stat->st_atim = vnode->access_time.to_posix();
+        stat->st_mtim = vnode->modification_time.to_posix();
+        stat->st_ctim = vnode->creation_time.to_posix();
         Filesystem *fs = vnode->fs;
         if (fs)
-            fs->stat(vnode, statbuf);
+            fs->stat(vnode, stat);
+
+        check(statbuf.to(u_statbuf));
         return 0;
     }
 
-    isize syscall_newfstatat(int fd, const char *path, struct stat *statbuf, int flags) {
-        log_syscall("newfstatat(%d, \"%s\", %#lX, %d)\n", fd, path, (uptr)statbuf, flags);
-        return fstatat_impl(fd, path, statbuf, flags);
+    isize syscall_newfstatat(int fd, UserStr u_path, UserPtr<struct stat> u_statbuf, int flags) {
+        get_user_path(path);
+        log_syscall("newfstatat(%d, \"%s\", %#lX, %d)\n", fd, (const char*)path, (uptr)u_statbuf, flags);
+        return fstatat_impl(fd, path, u_statbuf, flags);
     }
 
-    isize syscall_stat(const char *path, struct stat *statbuf) {
-        log_syscall("stat(\"%s\", %#lX)\n", path, (uptr)statbuf);
-        return fstatat_impl(AT_FDCWD, path, statbuf, 0);
+    isize syscall_stat(UserStr u_path, UserPtr<struct stat> u_statbuf) {
+        get_user_path(path);
+        log_syscall("stat(\"%s\", %#lX)\n", (const char*)path, (uptr)u_statbuf);
+        return fstatat_impl(AT_FDCWD, path, u_statbuf, 0);
     }
 
-    isize syscall_fstat(int fd, struct stat *statbuf) {
-        log_syscall("fstat(%d, %#lX)\n", fd, (uptr)statbuf);
-        return fstatat_impl(fd, "", statbuf, AT_EMPTY_PATH);
+    isize syscall_fstat(int fd, UserPtr<struct stat> u_statbuf) {
+        log_syscall("fstat(%d, %#lX)\n", fd, (uptr)u_statbuf);
+        return fstatat_impl(fd, "", u_statbuf, AT_EMPTY_PATH);
     }
 
-    isize syscall_lstat(const char *path, struct stat *statbuf) {
-        log_syscall("lstat(\"%s\", %#lX)\n", path, (uptr)statbuf);
-        return fstatat_impl(AT_FDCWD, path, statbuf, AT_SYMLINK_NOFOLLOW);
+    isize syscall_lstat(UserStr u_path, UserPtr<struct stat> u_statbuf) {
+        get_user_path(path);
+        log_syscall("lstat(\"%s\", %#lX)\n", (const char*)path, (uptr)u_statbuf);
+        return fstatat_impl(AT_FDCWD, path, u_statbuf, AT_SYMLINK_NOFOLLOW);
     }
 
     static isize renameat_impl(int old_dirfd, const char *old_path, int new_dirfd, const char *new_path) {
         Entry *old_starting_point = nullptr;
-        if (isize err = get_starting_point(&old_starting_point, old_dirfd, old_path); err < 0)
-            return err;
+        check(get_starting_point(&old_starting_point, old_dirfd, old_path));
 
         Entry *old_entry = path_to_entry(old_path, old_starting_point);
-        if (old_entry->vnode == nullptr)
-            return -ENOENT;
+        if (old_entry->vnode == nullptr) return -ENOENT;
 
         Entry *new_starting_point = nullptr;
-        if (isize err = get_starting_point(&new_starting_point, new_dirfd, new_path); err < 0)
-            return err;
+        check(get_starting_point(&new_starting_point, new_dirfd, new_path));
 
         Entry *new_entry = path_to_entry(new_path, new_starting_point);
         if (new_entry->vnode != nullptr)
@@ -979,8 +991,7 @@ namespace vfs {
 
     static isize readlinkat_impl(int dirfd, const char *path, void *buf, usize count) {
         Entry *starting_point = nullptr;
-        if (isize err = get_starting_point(&starting_point, dirfd, path); err < 0)
-            return err;
+        check(get_starting_point(&starting_point, dirfd, path));
         Entry *entry = path_to_entry(path, starting_point, false);
         if (entry->vnode == nullptr)
             return -ENOENT;
@@ -1009,21 +1020,17 @@ namespace vfs {
 
     static isize linkat_impl(int old_dirfd, const char *old_path, int new_dirfd, const char *new_path, int flags) {
         Entry *old_starting_point = nullptr;
-        if (isize err = get_starting_point(&old_starting_point, old_dirfd, old_path); err < 0)
-            return err;
+        check(get_starting_point(&old_starting_point, old_dirfd, old_path));
 
         Entry *old_entry = path_to_entry(old_path, old_starting_point);
-        if (old_entry->vnode == nullptr)
-            return -ENOENT;
+        if (old_entry->vnode == nullptr) return -ENOENT;
 
         Entry *new_starting_point = nullptr;
-        if (isize err = get_starting_point(&new_starting_point, new_dirfd, new_path); err < 0)
-            return err;
+        check(get_starting_point(&new_starting_point, new_dirfd, new_path));
 
         Entry *new_entry = path_to_entry(new_path, new_starting_point);
-        if (new_entry->vnode != nullptr)
-            return -EEXIST;
-        
+        if (new_entry->vnode != nullptr) return -EEXIST;
+
         new_entry->vnode = old_entry->vnode;
         new_entry->create(NodeType::HARD_LINK, -1, -1, -1);
         return 0;
@@ -1041,8 +1048,7 @@ namespace vfs {
 
     static isize symlinkat_impl(const char *target_path, int dirfd, const char *link_path) {
         Entry *link_starting_point = nullptr;
-        if (isize err = get_starting_point(&link_starting_point, dirfd, link_path); err < 0)
-            return err;
+        check(get_starting_point(&link_starting_point, dirfd, link_path));
         Entry *entry = path_to_entry(link_path, link_starting_point);
         if (entry->parent == nullptr)
             return -ENOENT;
@@ -1064,42 +1070,48 @@ namespace vfs {
         return symlinkat_impl(target_path, AT_FDCWD, link_path);
     }
 
-    isize faccessat2_impl(int dirfd, const char *pathname, int mode, int flags) {
-        struct stat buf;
-        return fstatat_impl(dirfd, pathname, &buf, flags & (AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW));
+    // FIXME: doesn't actually check access
+    isize faccessat2_impl(int dirfd, const char *path, int mode, int flags) {
+        VNode *vnode;
+        check(get_vnode_from_dirfd_path(&vnode, dirfd, path, flags & (AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW)));
+        return 0;
     }
 
-    isize syscall_faccessat(int dirfd, const char *pathname, int mode) {
-        log_syscall("faccessat(%d, \"%s\", %d)\n", dirfd, pathname, mode);
-        return faccessat2_impl(dirfd, pathname, mode, 0);
+    isize syscall_faccessat(int dirfd, UserStr u_path, int mode) {
+        get_user_path(path);
+        log_syscall("faccessat(%d, \"%s\", %d)\n", dirfd, (const char*)path, mode);
+        return faccessat2_impl(dirfd, path, mode, 0);
     }
 
-    isize syscall_faccessat2(int dirfd, const char *pathname, int mode, int flags) {
-        log_syscall("faccessat2(%d, \"%s\", %d, %d)\n", dirfd, pathname, mode, flags);
-        return faccessat2_impl(dirfd, pathname, mode, flags);
+    isize syscall_faccessat2(int dirfd, UserStr u_path, int mode, int flags) {
+        get_user_path(path);
+        log_syscall("faccessat2(%d, \"%s\", %d, %d)\n", dirfd, (const char*)path, mode, flags);
+        return faccessat2_impl(dirfd, path, mode, flags);
     }
 
-    isize syscall_access(const char *pathname, int mode) {
-        log_syscall("access(\"%s\", %d)\n", pathname, mode);
-        return faccessat2_impl(AT_FDCWD, pathname, mode, 0);
+    isize syscall_access(UserStr u_path, int mode) {
+        get_user_path(path);
+        log_syscall("access(\"%s\", %d)\n", (const char*)path, mode);
+        return faccessat2_impl(AT_FDCWD, path, mode, 0);
     }
 
     static isize fchownat_impl(int fd, const char *path, uid_t owner, gid_t group, int flags) {
         VNode *vnode;
-        if (isize err = get_vnode_from_dirfd_path(&vnode, fd, path, flags); err < 0)
-            return err;
+        check(get_vnode_from_dirfd_path(&vnode, fd, path, flags));
         if (owner != (uid_t)-1) vnode->uid = owner;
         if (group != (gid_t)-1) vnode->gid = group;
         return 0;
     }
 
-    isize syscall_fchownat(int fd, const char *path, uid_t owner, gid_t group, int flags) {
-        log_syscall("fchownat(%d, \"%s\", %u, %u, %d)\n", fd, path, owner, group, flags);
+    isize syscall_fchownat(int fd, UserStr u_path, uid_t owner, gid_t group, int flags) {
+        get_user_path(path);
+        log_syscall("fchownat(%d, \"%s\", %u, %u, %d)\n", fd, (const char*)path, owner, group, flags);
         return fchownat_impl(fd, path, owner, group, flags);
     }
 
-    isize syscall_chown(const char *path, uid_t owner, gid_t group) {
-        log_syscall("chown(\"%s\", %u, %u)\n", path, owner, group);
+    isize syscall_chown(UserStr u_path, uid_t owner, gid_t group) {
+        get_user_path(path);
+        log_syscall("chown(\"%s\", %u, %u)\n", (const char*)path, owner, group);
         return fchownat_impl(AT_FDCWD, path, owner, group, 0);
     }
 
@@ -1108,31 +1120,34 @@ namespace vfs {
         return fchownat_impl(fd, "", owner, group, AT_EMPTY_PATH);
     }
 
-    isize syscall_lchown(const char *path, uid_t owner, gid_t group) {
-        log_syscall("lchown(\"%s\", %u, %u)\n", path, owner, group);
+    isize syscall_lchown(UserStr u_path, uid_t owner, gid_t group) {
+        get_user_path(path);
+        log_syscall("lchown(\"%s\", %u, %u)\n", (const char*)path, owner, group);
         return fchownat_impl(AT_FDCWD, path, owner, group, AT_SYMLINK_NOFOLLOW);
     }
 
     static isize fchmodat2_impl(int fd, const char *path, mode_t mode, int flags) {
         VNode *vnode;
-        if (isize err = get_vnode_from_dirfd_path(&vnode, fd, path, flags); err < 0)
-            return err;
+        check(get_vnode_from_dirfd_path(&vnode, fd, path, flags));
         vnode->mode = mode;
         return 0;
     }
 
-    isize syscall_fchmodat2(int fd, const char *path, mode_t mode, int flags) {
-        log_syscall("fchmodat2(%d, \"%s\", %#o, %d)\n", fd, path, mode, flags);
+    isize syscall_fchmodat2(int fd, UserStr u_path, mode_t mode, int flags) {
+        get_user_path(path);
+        log_syscall("fchmodat2(%d, \"%s\", %#o, %d)\n", fd, (const char*)path, mode, flags);
         return fchmodat2_impl(fd, path, mode, flags);
     }
 
-    isize syscall_fchmodat(int fd, const char *path, mode_t mode) {
-        log_syscall("fchmodat(%d, \"%s\", %#o)\n", fd, path, mode);
+    isize syscall_fchmodat(int fd, UserStr u_path, mode_t mode) {
+        get_user_path(path);
+        log_syscall("fchmodat(%d, \"%s\", %#o)\n", fd, (const char*)path, mode);
         return fchmodat2_impl(fd, path, mode, 0);
     }
 
-    isize syscall_chmod(const char *path, mode_t mode) {
-        log_syscall("chmod(\"%s\", %#o)\n", path, mode);
+    isize syscall_chmod(UserStr u_path, mode_t mode) {
+        get_user_path(path);
+        log_syscall("chmod(\"%s\", %#o)\n", (const char*)path, mode);
         return fchmodat2_impl(AT_FDCWD, path, mode, 0);
     }
 
@@ -1186,8 +1201,9 @@ namespace vfs {
         return 0;
     }
 
-    isize syscall_statfs(const char *path, struct statfs *buf) {
-        log_syscall("statfs(\"%s\", %#lX)\n", path, (uptr)buf);
+    isize syscall_statfs(UserStr u_path, struct statfs *buf) {
+        get_user_path(path);
+        log_syscall("statfs(\"%s\", %#lX)\n", (const char*)path, (uptr)buf);
         sched::Process *process = cpu::get_current_thread()->process;
         Entry *entry = path_to_entry(path, process->cwd);
         if (entry->vnode == nullptr) return -ENOENT;
@@ -1203,8 +1219,7 @@ namespace vfs {
 
     static isize mknodat_impl(int dirfd, const char *path, mode_t mode, dev_t dev) {
         Entry *starting_point = nullptr;
-        if (isize err = get_starting_point(&starting_point, dirfd, path); err < 0)
-            return err;
+        check(get_starting_point(&starting_point, dirfd, path));
         Entry *entry = path_to_entry(path, starting_point);
         if (entry->vnode != nullptr)
             return -EEXIST;
@@ -1251,18 +1266,21 @@ namespace vfs {
         return 0;
     }
 
-    isize syscall_mknodat(int dirfd, const char *path, mode_t mode, dev_t dev) {
-        log_syscall("mknodat(%d, \"%s\", %#o, %#lX)\n", dirfd, path, mode, dev);
+    isize syscall_mknodat(int dirfd, UserStr u_path, mode_t mode, dev_t dev) {
+        get_user_path(path);
+        log_syscall("mknodat(%d, \"%s\", %#o, %#lX)\n", dirfd, (const char*)path, mode, dev);
         return mknodat_impl(dirfd, path, mode, dev);
     }
 
-    isize syscall_mknod(const char *path, mode_t mode, dev_t dev) {
-        log_syscall("mknod(\"%s\", %#o, %#lX)\n", path, mode, dev);
+    isize syscall_mknod(UserStr u_path, mode_t mode, dev_t dev) {
+        get_user_path(path);
+        log_syscall("mknod(\"%s\", %#o, %#lX)\n", (const char*)path, mode, dev);
         return mknodat_impl(AT_FDCWD, path, mode, dev);
     }
 
-    isize syscall_truncate(const char *path, isize length) {
-        log_syscall("truncate(\"%s\", %#lX)\n", path, length);
+    isize syscall_truncate(UserStr u_path, isize length) {
+        get_user_path(path);
+        log_syscall("truncate(\"%s\", %#lX)\n", (const char*)path, length);
         if (length < 0) return -EINVAL;
         sched::Process *process = cpu::get_current_thread()->process;
         Entry *entry = path_to_entry(path, process->cwd);

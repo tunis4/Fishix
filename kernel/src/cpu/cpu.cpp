@@ -14,6 +14,39 @@ namespace cpu {
 
     static CPU bsp_cpu;
 
+    void begin_user_access() {
+
+    }
+
+    void end_user_access() {
+
+    }
+
+    isize user_copy(void *user, void *kernel, usize size, bool write_to_user) {
+        begin_user_access();
+        if (write_to_user)
+            memcpy(user, kernel, size);
+        else
+            memcpy(kernel, user, size);
+        end_user_access();
+        return size;
+    }
+
+    isize copy_to_user(void *dst, const void *src, usize size) {
+        return user_copy(dst, (void*)src, size, true);
+    }
+
+    isize copy_from_user(void *dst, const void *src, usize size) {
+        return user_copy((void*)src, dst, size, false);
+    }
+
+    isize string_copy_from_user(char *dst, const char *src, usize max_size) {
+        begin_user_access();
+        usize ret = klib::string_copy(dst, src, max_size);
+        end_user_access();
+        return ret;
+    }
+
     usize extended_state_size = 0;
     void (*save_extended_state)(void *storage) = nullptr;
     void (*restore_extended_state)(void *storage) = nullptr;

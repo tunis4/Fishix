@@ -2,7 +2,7 @@
 
 #include <klib/common.hpp>
 
-#define SYSCALL_TRACE 0
+#define SYSCALL_TRACE 1
 #define UNIMPLEMENTED_SYSCALL_TRACE 0
 
 #if SYSCALL_TRACE

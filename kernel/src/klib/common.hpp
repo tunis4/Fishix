@@ -204,3 +204,5 @@ inline void  operator delete[](void *, void *) { }
 #define CONCAT2(a, b) CONCAT(a, b)
 
 #define defer auto CONCAT2(_defer, __LINE__) = ::klib::ScopeExitTag{}->*[&]()
+
+#define check(x) do { if (isize ret = (x); ret < 0) return ret; } while (0)

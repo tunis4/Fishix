@@ -27,6 +27,15 @@ namespace cpu {
     void smp_init(limine_mp_response *smp_res);
     void init(limine_mp_info *info);
 
+    // automatically called by the convenience functions below
+    void begin_user_access();
+    void end_user_access();
+
+    isize user_copy(void *user, void *kernel, usize size, bool write_to_user);
+    isize copy_to_user(void *dst, const void *src, usize size);
+    isize copy_from_user(void *dst, const void *src, usize size);
+    isize string_copy_from_user(char *dst, const char *src, usize max_size);
+
     extern usize extended_state_size;
     extern void (*save_extended_state)(void *storage);
     extern void (*restore_extended_state)(void *storage);

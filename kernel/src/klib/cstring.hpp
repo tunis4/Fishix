@@ -25,4 +25,9 @@ namespace klib {
     char* strchr(char *str, char c);
     const char* strchr(const char *str, char c);
     char* strstr(const char *str, const char *substr);
+
+    // different from strncpy: dst will always have exactly one null terminator
+    //
+    // returns the strlen of dst, or max_size if the string was truncated
+    usize string_copy(char *dst, const char *src, usize dst_size);
 }
