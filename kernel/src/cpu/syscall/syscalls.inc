@@ -103,6 +103,7 @@ SYSCALL(userland, rt_sigaction);
 SYSCALL(userland, sigaltstack);
 SYSCALL(userland, kill);
 SYSCALL(userland, tgkill);
+SYSCALL(userland, pause);
 SYSCALL(userland, gettid);
 SYSCALL(userland, getpid);
 SYSCALL(userland, getppid);

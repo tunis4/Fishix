@@ -28,4 +28,5 @@ namespace userland {
     isize syscall_sigaltstack(const stack_t *new_signal_stack, stack_t *old_signal_stack);
     isize syscall_kill(pid_t pid, int signal);
     isize syscall_tgkill(pid_t pid, pid_t tid, int signal);
+    isize syscall_pause();
 }

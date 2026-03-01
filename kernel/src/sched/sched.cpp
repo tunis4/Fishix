@@ -85,7 +85,8 @@ namespace sched {
 
     Thread::Thread(Process *process, int tid) :
         tid(tid), process(process),
-        signal_event("Thread::signal_event")
+        signal_event("Thread::signal_event"),
+        signal_return_event("Thread::signal_return_event")
     {
         process->thread_list.add_before(&thread_link);
         process->num_living_threads++;

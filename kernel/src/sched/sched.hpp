@@ -52,6 +52,7 @@ namespace sched {
         u64 poll_saved_signal_mask = 0; // only valid when poll is called with a signal mask
         bool has_poll_saved_signal_mask = false;
         Event signal_event;
+        Event signal_return_event;
 
         // used for SA_RESTART
         usize last_syscall_num;

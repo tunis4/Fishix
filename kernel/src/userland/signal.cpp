@@ -183,6 +183,7 @@ namespace userland {
             thread->signal_mask = thread->poll_saved_signal_mask;
             thread->has_poll_saved_signal_mask = false;
         }
+        thread->signal_return_event.trigger(true);
     }
 
     isize syscall_rt_sigreturn() {
@@ -303,6 +304,13 @@ namespace userland {
 
         thread->send_signal(signal);
         return 0;
+    }
+
+    isize syscall_pause() {
+        log_syscall("pause()\n");
+        auto *thread = cpu::get_current_thread();
+        thread->signal_return_event.wait();
+        return -EINTR;
     }
 
     SignalDefault signal_default_action(int signal) {
