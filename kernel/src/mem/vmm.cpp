@@ -174,7 +174,7 @@ namespace mem {
 
     isize Pagemap::get_physical_addr(uptr virt) {
         u64 *entry = find_page_table_entry(virt);
-        if (entry && (*entry & 0x000FFFFFFFFFF000))
+        if (entry && (*entry & PAGE_PRESENT))
             return *entry & 0x000FFFFFFFFFF000;
         else
             return handle_page_fault(virt);
@@ -237,7 +237,7 @@ namespace mem {
 
     // returns EFAULT if the page fault couldnt be handled
     isize Pagemap::handle_page_fault(uptr virt) {
-        // klib::SpinlockGuard guard(this->lock);
+        klib::SpinlockGuard guard(this->lock);
 
         uptr page_virt = klib::align_down(virt, PAGE_SIZE);
         u64 *entry = find_page_table_entry(virt, true);
@@ -301,7 +301,7 @@ namespace mem {
 
             u64 *pml3 = (u64*)((this->pml4[i] & 0x000FFFFFFFFFF000) + hhdm);
 
-            uptr new_page = alloc_page_for_page_table();
+            uptr new_page = forked->alloc_page_for_page_table();
             memset((void*)(new_page + hhdm), 0, PAGE_SIZE);
             forked->pml4[i] = new_page | (pml4[i] & ~0x000FFFFFFFFFF000);
             u64 *forked_pml3 = (u64*)(new_page + hhdm);
@@ -314,7 +314,7 @@ namespace mem {
 
                 u64 *pml2 = (u64*)((pml3[i] & 0x000FFFFFFFFFF000) + hhdm);
 
-                uptr new_page = alloc_page_for_page_table();
+                uptr new_page = forked->alloc_page_for_page_table();
                 memset((void*)(new_page + hhdm), 0, PAGE_SIZE);
                 forked_pml3[i] = new_page | (pml3[i] & ~0x000FFFFFFFFFF000);
                 u64 *forked_pml2 = (u64*)(new_page + hhdm);
@@ -327,7 +327,7 @@ namespace mem {
 
                     u64 *pml1 = (u64*)((pml2[i] & 0x000FFFFFFFFFF000) + hhdm);
 
-                    uptr new_page = alloc_page_for_page_table();
+                    uptr new_page = forked->alloc_page_for_page_table();
                     memset((void*)(new_page + hhdm), 0, PAGE_SIZE);
                     forked_pml2[i] = new_page | (pml2[i] & ~0x000FFFFFFFFFF000);
                     u64 *forked_pml1 = (u64*)(new_page + hhdm);
@@ -341,7 +341,7 @@ namespace mem {
 
         MappedRange *old_range;
         LIST_FOR_EACH(old_range, &range_list, range_link) {
-            auto *new_range = forked->add_range(old_range->base, old_range->length, old_range->page_flags, old_range->type, old_range->phy_base, old_range->file, old_range->file_offset, false, false);
+            auto *new_range = forked->add_range(old_range->base, old_range->length, old_range->page_flags, old_range->type, old_range->phy_base, old_range->file, old_range->file_offset, false, false, false);
 
             if (new_range->type == MappedRange::Type::ANONYMOUS || new_range->type == MappedRange::Type::FILE) {
                 pmm::Page *old_page;
@@ -353,7 +353,6 @@ namespace mem {
                     uptr new_phy = new_page->pfn * PAGE_SIZE;
                     uptr old_phy = old_page->pfn * PAGE_SIZE;
 
-                    // klib::printf("%#lX\n", old_page->mapped_addr);
                     forked->map_page(new_phy, new_page->mapped_addr, new_range->page_flags);
                     memcpy((void*)(new_phy + hhdm), (void*)(old_phy + hhdm), PAGE_SIZE);
                 }
@@ -363,16 +362,6 @@ namespace mem {
         }
 
         return forked;
-    }
-
-    void Pagemap::assert_consistency() {
-        MappedRange *previous = nullptr;
-        LIST_FOR_EACH_SAFE(previous, &this->range_list, range_link) {
-            if (&next->range_link == &this->range_list)
-                break;
-            if (next->base < previous->end())
-                panic("Pagemap ranges not in order or overlapping");
-        }
     }
 
     MappedRange* Pagemap::add_range(uptr base, usize length, u64 page_flags, MappedRange::Type type, uptr phy_base, vfs::FileDescription *file,
@@ -397,10 +386,11 @@ namespace mem {
                         if (keep_pages && base == existing->base && end == existing->end() && type == existing->type) {
                             if (existing->page_flags != page_flags) {
                                 existing->page_flags = page_flags;
-                                invalidate_pages(existing);
+                                invalidate_pages(existing->base, existing->length, existing);
                             }
-                            break;
+                            return existing;
                         } else {
+                            invalidate_pages(existing->base, existing->length, nullptr);
                             delete existing;
                         }
                     } else {
@@ -415,12 +405,16 @@ namespace mem {
                         // need to split existing range
                         usize base2 = end;
                         usize length2 = existing->end() - end;
+                        usize split_offset = base2 - existing->base;
+                        
+                        uptr split_phy = existing->phy_base ? existing->phy_base + split_offset : 0;
+                        usize split_file_offset = existing->file_offset + split_offset;
 
                         existing->length = base - existing->base;
 
-                        auto *split = add_range(base2, length2, existing->page_flags, existing->type, existing->phy_base, existing->file, existing->file_offset, false, false);
+                        auto *split = add_range(base2, length2, existing->page_flags, existing->type, split_phy, existing->file, split_file_offset, false, false, keep_pages);
                         if (split)
-                            invalidate_pages(split);
+                            invalidate_pages(split->base, split->length, split);
                     }
                 }
                 had_overlap = true;
@@ -440,24 +434,13 @@ namespace mem {
                     } else {
                         continue;
                     }
-                    // invalidate_pages(existing); // FIXME: unsure if this is necessary
                     return nullptr;
                 }
             }
         }
 
-#if 0
-        {
-            MappedRange *other;
-            LIST_FOR_EACH(other, &this->range_list, range_link)
-                if (base < other->base + other->length && base + length > other->base)
-                    panic("New MappedRange { base = %#lX, length = %#lX } overlaps with existing MappedRange { base = %#lX, length = %#lX }", base, length, other->base, other->length);
-        }
-        assert_consistency();
-#endif
-
         if (type == MappedRange::Type::NONE) {
-            invalidate_pages(base, length);
+            invalidate_pages(base, length, nullptr);
             return nullptr;
         }
 
@@ -478,7 +461,7 @@ namespace mem {
         previous->range_link.add(&new_range->range_link);
 
         if (had_overlap)
-            invalidate_pages(new_range);
+            invalidate_pages(new_range->base, new_range->length, new_range);
         return new_range;
     }
 
@@ -489,12 +472,12 @@ namespace mem {
 
     void Pagemap::map_direct(uptr base, usize length, u64 page_flags, uptr phy_base) {
         ASSERT(page_flags & PAGE_PRESENT);
-        add_range(base, length, page_flags, MappedRange::Type::DIRECT, phy_base, nullptr, 0);
+        add_range(base, length, page_flags, MappedRange::Type::DIRECT, phy_base, nullptr, 0, false, true, false);
     }
 
     void Pagemap::map_file(uptr base, usize length, u64 page_flags, vfs::FileDescription *file, usize file_offset) {
         ASSERT(page_flags & PAGE_PRESENT);
-        add_range(base, length, page_flags, MappedRange::Type::FILE, 0, file, file_offset);
+        add_range(base, length, page_flags, MappedRange::Type::FILE, 0, file, file_offset, false, true, false);
     }
 
     void Pagemap::invalidate_page(uptr virt, MappedRange *range) {
@@ -503,15 +486,17 @@ namespace mem {
 
         u64 phy = (*entry & 0x000FFFFFFFFFF000);
         pmm::Page *page = pmm::find_page(phy);
-        if (page->free) // FIXME
-            page = nullptr;
+        if (page)
+            ASSERT(!page->free);
         if (page)
             page->link.remove();
 
         if (range) {
             ASSERT(range->page_flags & PAGE_PRESENT);
-            if (!page)
+            if (!page) {
                 page = pmm::alloc_page();
+                phy = page->pfn * PAGE_SIZE;
+            }
             page->mapped_addr = virt;
             range->page_list.add_before(&page->link);
             *entry = phy | range->page_flags;
@@ -609,8 +594,25 @@ namespace mem {
 
         klib::InterruptLock interrupt_guard;
 
-        MappedRange *existing = process->pagemap->addr_to_range((uptr)addr);
-        process->pagemap->add_range((uptr)addr, length, mmap_prot_to_page_flags(prot), existing->type, existing->phy_base, existing->file, existing->file_offset, true, true, true);
+        uptr current = (uptr)addr;
+        uptr end = current + length;
+
+        while (current < end) {
+            MappedRange *existing = process->pagemap->addr_to_range(current);
+            if (!existing)
+                return -ENOMEM;
+
+            usize range_len = existing->end() - current;
+            if (current + range_len > end)
+                range_len = end - current;
+
+            usize offset = existing->file_offset + (current - existing->base);
+            uptr phy = existing->phy_base ? existing->phy_base + (current - existing->base) : 0;
+
+            process->pagemap->add_range(current, range_len, mmap_prot_to_page_flags(prot), existing->type, phy, existing->file, offset, true, true, true);
+            
+            current += range_len;
+        }
         return 0;
     }
 
@@ -658,12 +660,30 @@ namespace mem {
             usize num_pages = length / PAGE_SIZE;
             for (usize i = 0; i < num_pages; i++) {
                 uptr page = (uptr)addr + i * PAGE_SIZE;
-                process->pagemap->invalidate_page(page);
+                process->pagemap->invalidate_page(page, nullptr);
             }
         } return 0;
         default:
             klib::printf("madvise: unsupported advice %d\n", advice);
             return -EINVAL;
         }
+    }
+
+    isize syscall_brk(void *addr) {
+        log_syscall("brk(%#lX)\n", (uptr)addr);
+        sched::Process *process = cpu::get_current_thread()->process;
+        if (addr) {
+            uptr new_brk = (uptr)addr;
+            uptr old_page_brk = klib::align_up(process->brk, PAGE_SIZE);
+            uptr new_page_brk = klib::align_up(new_brk, PAGE_SIZE);
+
+            if (new_page_brk > old_page_brk) {
+                process->pagemap->map_anonymous(old_page_brk, new_page_brk - old_page_brk, mmap_prot_to_page_flags(PROT_READ | PROT_WRITE));
+            } else if (new_page_brk < old_page_brk) {
+                process->pagemap->add_range(new_page_brk, old_page_brk - new_page_brk, 0, MappedRange::Type::NONE, 0, nullptr, 0, false, true, false);
+            }
+            process->brk = new_brk;
+        }
+        return process->brk;
     }
 }

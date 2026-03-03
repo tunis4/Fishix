@@ -100,16 +100,13 @@ namespace mem {
         MappedRange* add_range(uptr base, usize length, u64 page_flags, MappedRange::Type type, uptr phy_base, vfs::FileDescription *file,
             usize file_offset, bool merge = true, bool resolve_overlap = true, bool keep_pages = false);
 
-        void invalidate_page(uptr virt, MappedRange *range = nullptr); // frees page if range is nullptr
-        void invalidate_pages(uptr base, usize length, MappedRange *range = nullptr); // frees pages if range is nullptr
-        void invalidate_pages(MappedRange *range) { return invalidate_pages(range->base, range->length, range); }
+        void invalidate_page(uptr virt, MappedRange *range); // frees page if range is nullptr
+        void invalidate_pages(uptr base, usize length, MappedRange *range); // frees pages if range is nullptr
 
         MappedRange* addr_to_range(uptr virt);
         isize handle_page_fault(uptr virt);
 
         Pagemap* fork();
-
-        void assert_consistency();
 
         template<klib::Putchar Put>
         void print(Put put) {
@@ -153,4 +150,5 @@ namespace mem {
     isize syscall_mprotect(void *addr, usize length, int prot);
     isize syscall_mincore(void *addr, usize length, u8 *vec);
     isize syscall_madvise(void *addr, usize length, int advice);
+    isize syscall_brk(void *addr);
 }

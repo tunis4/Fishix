@@ -113,7 +113,7 @@ namespace pmm {
             panic("Out of physical memory");
 
         Page *page = LIST_ENTRY(page_freelist.next, Page, link);
-        // ASSERT(page->free);
+        ASSERT(page->free);
         page->free = false;
         page_freelist.next->remove();
         stats.total_free_pages--;
@@ -123,10 +123,10 @@ namespace pmm {
     void free_page(Page *page) {
         klib::SpinlockGuard guard(pmm_lock);
 
-        // ASSERT(!page->free);
+        ASSERT(!page->free);
         page->free = true;
         page->mapped_addr = 0;
-        page_freelist.add_before(&page->link);
+        page_freelist.add(&page->link);
         stats.total_free_pages++;
     }
 }

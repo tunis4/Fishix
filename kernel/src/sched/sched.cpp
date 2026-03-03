@@ -402,6 +402,8 @@ namespace sched {
                 return err;
         }
 
+        process->brk = process->mmap_anon_base + 0x30000000;
+
         if (ld_path) {
             vfs::VNode *ld_file;
             {
@@ -886,6 +888,7 @@ namespace sched {
         if (new_process) {
             new_process->pagemap = old_process->pagemap->fork();
             new_process->mmap_anon_base = old_process->mmap_anon_base;
+            new_process->brk = old_process->brk;
 
             new_process->exe = old_process->exe;
             new_process->cwd = old_process->cwd;
@@ -1198,9 +1201,11 @@ namespace sched {
 
     isize syscall_sched_getaffinity(int pid, usize cpusetsize, cpu_set_t *mask) {
         log_syscall("sched_getaffinity(%d, %#lX, %#lX)\n", pid, cpusetsize, (uptr)mask);
-        CPU_ZERO_S(cpusetsize, mask);
+        if (cpusetsize < 8)
+            return -EINVAL;
+        CPU_ZERO_S(8, mask);
         CPU_SET(0, mask);
-        return cpusetsize;
+        return 8;
     }
 
     isize syscall_getcpu(uint *cpu, uint *node) {
@@ -1281,6 +1286,17 @@ namespace sched {
                 klib::printf("prctl: unimplemented PR_SET_MM op %d\n", op);
                 return -EINVAL;
             }
+        } return 0;
+        case PR_SET_VMA: {
+            long attr = arg1;
+            u64 addr = arg2;
+            u64 size = arg3;
+            const char *name = (const char*)arg4;
+
+            if (attr != PR_SET_VMA_ANON_NAME)
+                return -EINVAL;
+
+            klib::printf("prctl: PR_SET_VMA_ANON_NAME unimplemented, addr: %#lX, size: %#lX, name: %s", addr, size, name);
         } return 0;
         case PR_CAPBSET_READ: return 1;
         default:
