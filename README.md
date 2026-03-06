@@ -1,13 +1,13 @@
 # Fishix
 
-A hobby kernel for x86_64 with Linux binary compatibility. It is written in C++ and is capable of running a decent amount of Linux userspace programs.
+A hobby kernel for x86_64 with Linux binary compatibility. It is written in C++ and is capable of running a decent amount of Linux userspace programs, such as KDE Plasma, GIMP, Minecraft and Factorio.
 
-It can run on real hardware from a live USB. Since the focus is currently entirely on userspace support, drivers are very limited.  Only the Limine bootloader is supported.
+It can run on real hardware from a live USB. Since the focus is currently entirely on userspace support, drivers are very limited. SMP is not yet supported, only one core will be used. Networking is currently UDP only. Only the Limine bootloader is supported.
 
-The long term goal of the project is for it to be usable in place of the Linux kernel on a basic desktop system.
+The long term goal of the project is for it to be somewhat usable in place of the Linux kernel on a basic desktop system.
 
 ![Screenshot](/screenshot.png?raw=true "Screenshot")
-*Progress screenshot from 18 November 2025*
+*Progress screenshot from 6 March 2026*
 
 ## Building and running
 
@@ -24,13 +24,13 @@ Build kernel: `make -j$(nproc)`
 
 Build an .iso and run in QEMU: `SYSROOT=sysroot ISO=/tmp/fishix.iso make -j$(nproc) run`
 
-The provided distro-files have a bootloader option for launching into a graphical environment, which expects the sysroot to have `xorg` and `mate` installed. You can modify the distro-files to change this.
-
 ### Setting up a basic Void Linux sysroot
 
-`XBPS_ARCH=x86_64 xbps-install -S -r sysroot -R "https://repo-default.voidlinux.org/current" base-files bash coreutils runit-void util-linux glibc-locales`
+`XBPS_ARCH=x86_64 xbps-install -S -r sysroot -R "https://repo-default.voidlinux.org/current" base-files bash coreutils runit-void util-linux glibc-locales tzdata which shadow metalog`
 
 Edit `sysroot/etc/default/libc-locales` then run `xbps-reconfigure -r sysroot -f glibc-locales`
+
+The provided distro-files have a bootloader option for launching into a graphical environment with KDE, which expects the sysroot to also have the packages `xorg st kde-plasma kde-baseapps plasma5support` installed. You can modify the distro-files to change this.
 
 ## License
 

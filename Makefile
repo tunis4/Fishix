@@ -12,12 +12,12 @@ endif
 all: kernel
 
 run: ovmf/OVMF.fd $(ISO) $(DISK)
-	qemu-system-x86_64 -cdrom $(ISO) -m 4G -serial stdio \
+	qemu-system-x86_64 -cdrom $(ISO) -m 16G -serial stdio \
 		-no-reboot -no-shutdown -M smm=off -smp 1 -machine q35 -cpu host \
 		-bios ovmf/OVMF.fd \
         -drive file=$(DISK),if=virtio \
 		-netdev user,id=net0 -device virtio-net,netdev=net0 \
-		-enable-kvm -display gtk,gl=on -s
+		-enable-kvm -display sdl,gl=on -s
 #		-object filter-dump,id=f1,netdev=net0,file=dump.pcap
 
 kernel: kernel/build

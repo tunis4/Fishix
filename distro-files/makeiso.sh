@@ -31,6 +31,7 @@ mkdir -p $SYSROOT/var/lib/xkb || true
 mkdir -p $SYSROOT/sys/class/graphics/fb0/device || true
 mkdir -p $SYSROOT/sys/bus/idk || true
 ln -s ../../../../../../bus/idk $SYSROOT/sys/class/graphics/fb0/device/subsystem || true
+ln -s ../usr/share/zoneinfo/UTC $SYSROOT/etc/localtime || true
 
 # Make an initramfs with the sysroot.
 ( cd $SYSROOT && tar --format=ustar -cf $WORK_DIR/initramfs.tar * )
