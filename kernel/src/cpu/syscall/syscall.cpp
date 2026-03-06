@@ -14,6 +14,7 @@
 #include <userland/inotify.hpp>
 #include <userland/eventfd.hpp>
 #include <userland/signalfd.hpp>
+#include <userland/memfd.hpp>
 #include <sys/syscall.h>
 
 namespace cpu::syscall {

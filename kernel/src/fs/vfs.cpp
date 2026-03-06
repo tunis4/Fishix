@@ -9,6 +9,7 @@
 #include <sched/time.hpp>
 #include <cpu/syscall/syscall.hpp>
 #include <userland/pipe.hpp>
+#include <userland/memfd.hpp>
 #include <sys/random.h>
 #include <fcntl.h>
 #include <dirent.h>
@@ -658,8 +659,30 @@ namespace vfs {
         case F_SETLKW:
             klib::printf("fcntl: F_SETLK and F_SETLKW are stubs\n");
             return 0;
+        case F_GETLK:
+            klib::printf("fcntl: F_GETLK is a stub\n");
+            ((flock*)arg)->l_type = F_UNLCK;
+            return 0;
         case F_GETPIPE_SZ:
             return userland::Pipe::capacity;
+        case F_ADD_SEALS: {
+            if (description->vnode == nullptr || description->vnode->node_type != NodeType::MEMFD)
+                return -EINVAL;
+            auto *memfd = (userland::MemFD*)description->vnode;
+            if ((memfd->seals & F_SEAL_SEAL) || !description->can_write())
+                return -EPERM;
+            if (arg & ~(F_SEAL_SEAL | F_SEAL_SHRINK | F_SEAL_GROW | F_SEAL_WRITE | F_SEAL_FUTURE_WRITE | F_SEAL_EXEC))
+                return -EINVAL;
+            memfd->seals |= arg;
+            klib::printf("fcntl: memfd seals not fully implemented\n");
+            return 0;
+        }
+        case F_GET_SEALS: {
+            if (description->vnode == nullptr || description->vnode->node_type != NodeType::MEMFD)
+                return -EINVAL;
+            auto *memfd = (userland::MemFD*)description->vnode;
+            return memfd->seals;
+        }
         default:
             klib::printf("fcntl: unsupported cmd %u\n", cmd);
             return -EINVAL;

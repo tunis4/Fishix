@@ -70,11 +70,18 @@ namespace mem {
         kernel_pagemap.range_list.add_before(&kernel_hhdm_range.range_link);
         kernel_pagemap.range_list.add_before(&kernel_heap_range.range_link);
         kernel_pagemap.activate();
+
+        for (usize i = 256; i < 512; i++) {
+            u64 *entry = &kernel_pagemap.pml4[i];
+            if (*entry & PAGE_PRESENT) continue;
+            kernel_pagemap.create_next_page_table(entry);
+        }
     }
 
     MappedRange::MappedRange(uptr base, usize length, u64 page_flags, Type type) 
         : base(base), length(length), page_flags(page_flags), type(type)
     {
+        original_base = base;
         page_list.init();
     }
 
@@ -237,7 +244,7 @@ namespace mem {
 
     // returns EFAULT if the page fault couldnt be handled
     isize Pagemap::handle_page_fault(uptr virt) {
-        klib::SpinlockGuard guard(this->lock);
+        // klib::SpinlockGuard guard(this->lock);
 
         uptr page_virt = klib::align_down(virt, PAGE_SIZE);
         u64 *entry = find_page_table_entry(virt, true);
@@ -259,8 +266,21 @@ namespace mem {
                 return phy;
             }
             case MappedRange::Type::DIRECT: {
-                uptr phy = page_virt - range->base + range->phy_base;
+                uptr phy = page_virt - range->original_base + range->phy_base;
                 *entry = (phy & 0x000FFFFFFFFFF000) | range->page_flags;
+                return phy;
+            }
+            case MappedRange::Type::DIRECT_VIRTUAL: {
+                uptr map = page_virt - range->original_base + range->phy_base;
+                u64 *target_entry = find_page_table_entry(map);
+                if (!target_entry) {
+                    handle_page_fault(map);
+                    target_entry = find_page_table_entry(map);
+                    if (!target_entry)
+                        return -EFAULT;
+                }
+                uptr phy = *target_entry & 0x000FFFFFFFFFF000;
+                *entry = phy | range->page_flags;
                 return phy;
             }
             case MappedRange::Type::FILE: {
@@ -270,7 +290,7 @@ namespace mem {
 
                 uptr phy = new_page->pfn * PAGE_SIZE;
                 void *ptr = (void*)(phy + hhdm);
-                usize offset = page_virt - range->base + range->file_offset;
+                usize offset = page_virt - range->original_base + range->file_offset;
 
                 memset(ptr, 0, PAGE_SIZE);
                 range->file->vnode->read(nullptr, ptr, PAGE_SIZE, offset);
@@ -357,7 +377,7 @@ namespace mem {
                     memcpy((void*)(new_phy + hhdm), (void*)(old_phy + hhdm), PAGE_SIZE);
                 }
             } else {
-                ASSERT(new_range->type == MappedRange::Type::DIRECT);
+                ASSERT(new_range->type == MappedRange::Type::DIRECT || new_range->type == MappedRange::Type::DIRECT_VIRTUAL);
             }
         }
 
@@ -654,6 +674,7 @@ namespace mem {
         case MADV_WILLNEED:
         case MADV_DONTDUMP:
         case MADV_DODUMP:
+        case MADV_NOHUGEPAGE:
             return 0; // these operations are safe to ignore
         case MADV_FREE: // FIXME: not actually equivalent
         case MADV_DONTNEED: {

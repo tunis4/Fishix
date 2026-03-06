@@ -29,13 +29,15 @@ namespace mem {
             NONE, // only to be used as an argument to add_range
             DIRECT,
             ANONYMOUS,
-            FILE
+            FILE,
+            DIRECT_VIRTUAL, // mirrors another virtual mapping in the kernel
         };
 
         klib::ListHead range_link;
         klib::ListHead page_list;
 
         uptr base;
+        uptr original_base; // used for fixing offsets after the base is changed
         usize length;
         u64 page_flags;
         Type type;
@@ -69,7 +71,7 @@ namespace mem {
             for (; written < 72; written++)
                 put(' ');
             if (type == Type::DIRECT) klib::printf_template(put, "direct to %#lX", phy_base);
-            else if (type == Type::FILE) file->entry->print_path(put);
+            else if (type == Type::FILE && file->entry) file->entry->print_path(put);
             put('\n');
         }
     };
@@ -115,7 +117,6 @@ namespace mem {
                 range->print(put);
         }
 
-    private:
         uptr alloc_page_for_page_table();
         u64* create_next_page_table(u64 *current_entry);
     };

@@ -118,6 +118,7 @@ source_files = [
     'src/userland/inotify.cpp',
     'src/userland/eventfd.cpp',
     'src/userland/signalfd.cpp',
+    'src/userland/memfd.cpp',
 
     'src/userland/socket/socket.cpp',
     'src/userland/socket/local/stream.cpp',
