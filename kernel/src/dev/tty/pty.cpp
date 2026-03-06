@@ -109,6 +109,12 @@ namespace dev::tty {
         case TIOCGPKT:
             *(int*)arg = packet_mode;
             return 0;
+        case TIOCGPGRP:
+            if (!slave) {
+                *(int*)arg = 0;
+                return 0;
+            }
+            [[fallthrough]];
         default:
             return terminal->tty_ioctl(fd, cmd, arg);
         }

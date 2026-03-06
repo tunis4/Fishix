@@ -270,7 +270,7 @@ namespace socket {
                 packet_length += iov->iov_len;
             }
 
-            isize ret = ring_buffer->write((u8*)&packet_length, sizeof(packet_length));
+            isize ret = peer->ring_buffer->write((u8*)&packet_length, sizeof(packet_length));
             ASSERT(ret == sizeof(packet_length));
         }
 

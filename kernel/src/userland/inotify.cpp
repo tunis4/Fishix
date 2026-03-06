@@ -37,8 +37,7 @@ namespace userland {
         return revents;
     }
 
-    isize syscall_inotify_init1(int flags) {
-        log_syscall("inotify_init1(%#X)\n", flags);
+    static isize inotify_init1_impl(int flags) {
         sched::Process *process = cpu::get_current_thread()->process;
 
         if (flags & ~(IN_NONBLOCK | IN_CLOEXEC))
@@ -51,6 +50,16 @@ namespace userland {
         inotify->open(description);
         process->file_descriptors[ifd].init(description, (flags & IN_CLOEXEC) ? FD_CLOEXEC : 0);
         return ifd;
+    }
+
+    isize syscall_inotify_init() {
+        log_syscall("inotify_init()\n");
+        return inotify_init1_impl(0);
+    }
+
+    isize syscall_inotify_init1(int flags) {
+        log_syscall("inotify_init1(%#X)\n", flags);
+        return inotify_init1_impl(flags);
     }
 
     isize syscall_inotify_add_watch(int ifd, const char *path, u32 mask) {

@@ -119,7 +119,7 @@ namespace userland {
         u64 old_rsp = state->rsp;
 
         if ((action->flags & SA_ONSTACK) && !(thread->signal_alt_stack.ss_flags & SS_DISABLE)) {
-            state->rsp = (uptr)thread->signal_alt_stack.ss_sp;
+            state->rsp = (uptr)thread->signal_alt_stack.ss_sp + thread->signal_alt_stack.ss_size;
             thread->signal_alt_stack.ss_flags |= SS_ONSTACK;
         } else {
             state->rsp -= 128; // respect red zone
