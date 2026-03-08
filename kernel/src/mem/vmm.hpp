@@ -95,7 +95,7 @@ namespace mem {
         void map_pages(uptr phy, uptr virt, usize size, u64 flags);
         void map_kernel(); // for user pagemaps
 
-        void map_anonymous(uptr base, usize length, u64 page_flags);
+        void map_anonymous(uptr base, usize length, u64 page_flags, bool keep_pages = true);
         void map_direct(uptr base, usize length, u64 page_flags, uptr phy_base);
         void map_file(uptr base, usize length, u64 page_flags, vfs::FileDescription *file, usize file_offset);
 

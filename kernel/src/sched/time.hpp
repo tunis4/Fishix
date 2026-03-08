@@ -14,6 +14,7 @@ namespace sched {
         klib::TimeSpec interval = {}; // if this is set, event and fired are unused, only callback is called
         Event event;
         klib::ListHead armed_timers_link;
+        klib::ListHead thread_timers_link;
         Callback *callback = nullptr;
         void *callback_data;
         bool fired = false;
@@ -28,7 +29,7 @@ namespace sched {
     void init_time(limine_boot_time_response *boot_time_res);
     void update_time(klib::TimeSpec interval);
 
-    [[nodiscard]] klib::TimeSpec get_clock(clockid_t clock_id);
+    [[nodiscard]] klib::TimeSpec get_clock(clockid_t clock_id, bool imprecise = false);
 
     isize syscall_time(time_t *t);
     isize syscall_gettimeofday(timeval *tv);

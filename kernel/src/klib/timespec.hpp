@@ -21,8 +21,8 @@ namespace klib {
 
         TimeSpec& operator +=(const TimeSpec &rhs) {
             if (this->nanoseconds + rhs.nanoseconds > 999'999'999) {
-                i64 diff = (this->nanoseconds - rhs.nanoseconds) - 1'000'000'000;
-                this->nanoseconds = diff;
+                i64 remaining = (this->nanoseconds + rhs.nanoseconds) - 1'000'000'000;
+                this->nanoseconds = remaining;
                 this->seconds++;
             } else {
                 this->nanoseconds += rhs.nanoseconds;

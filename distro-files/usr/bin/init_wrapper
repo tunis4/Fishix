@@ -11,6 +11,7 @@ startwm() {
     export XDG_RUNTIME_DIR="/run/user/0"
     export NO_AT_BRIDGE=1
     export LC_ALL=en_US.utf8
+    export PATH="/usr/local/sbin:/usr/local/bin:/usr/bin:$HOME/.local/bin:$HOME/.local/bin"
 
     { sleep 10; cat /var/log/everything/current; } &
 

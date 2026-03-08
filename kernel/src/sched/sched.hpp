@@ -38,6 +38,7 @@ namespace sched {
         klib::ListHead sched_link;
         volatile bool yield_await = false;
 
+        klib::ListHead armed_timers_list;
         klib::Vector<Event::Listener> listeners;
         usize which_event;
 

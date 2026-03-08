@@ -1024,10 +1024,20 @@ namespace vfs {
 
     isize syscall_ioctl(int fd, usize cmd, void *arg) {
         log_syscall("ioctl(%d, %#lX, %#lX)\n", fd, cmd, (uptr)arg);
-        FileDescription *description = get_file_description(fd);
-        if (!description)
+        sched::Process *process = cpu::get_current_thread()->process;
+        if (fd >= (int)process->file_descriptors.size() || fd < 0)
             return -EBADF;
-        return description->vnode->ioctl(description, cmd, arg);
+        FileDescriptor *descriptor = &process->file_descriptors[fd];
+        FileDescription *description = descriptor->get_description();
+        if (description == nullptr)
+            return -EBADF;
+
+        switch (cmd) {
+        case FIOCLEX:  descriptor->set_flags(FD_CLOEXEC); return 0;
+        case FIONCLEX: descriptor->set_flags(0); return 0;
+        default:
+            return description->vnode->ioctl(description, cmd, arg);
+        }
     }
 
     static isize linkat_impl(int old_dirfd, const char *old_path, int new_dirfd, const char *new_path, int flags) {

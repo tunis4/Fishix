@@ -86,10 +86,8 @@ namespace userland {
         log_syscall("memfd_create(%s, %#X)\n", name, flags);
         sched::Process *process = cpu::get_current_thread()->process;
 
-        if (flags & ~(MFD_CLOEXEC | MFD_ALLOW_SEALING)) {
+        if (flags & ~(MFD_CLOEXEC | MFD_ALLOW_SEALING | MFD_HUGETLB))
             klib::printf("memfd_create: unsupported flags %#X\n", flags);
-            return -EINVAL;
-        }
 
         auto *memfd = new MemFD();
         if (!(flags & MFD_ALLOW_SEALING))

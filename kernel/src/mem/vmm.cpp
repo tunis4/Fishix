@@ -448,13 +448,16 @@ namespace mem {
                 if (type == existing->type && page_flags == existing->page_flags) {
                     if (base == existing->end()) {
                         existing->length += length;
+                        if (had_overlap) invalidate_pages(base, length, existing);
+                        return nullptr;
                     } else if (end == existing->base) {
                         existing->base -= length;
                         existing->length += length;
+                        if (had_overlap) invalidate_pages(base, length, existing);
+                        return nullptr;
                     } else {
                         continue;
                     }
-                    return nullptr;
                 }
             }
         }
@@ -485,9 +488,9 @@ namespace mem {
         return new_range;
     }
 
-    void Pagemap::map_anonymous(uptr base, usize length, u64 page_flags) {
+    void Pagemap::map_anonymous(uptr base, usize length, u64 page_flags, bool keep_pages) {
         ASSERT(page_flags & PAGE_PRESENT);
-        add_range(base, length, page_flags, MappedRange::Type::ANONYMOUS, 0, nullptr, 0, true, true, true);
+        add_range(base, length, page_flags, MappedRange::Type::ANONYMOUS, 0, nullptr, 0, true, true, keep_pages);
     }
 
     void Pagemap::map_direct(uptr base, usize length, u64 page_flags, uptr phy_base) {
@@ -572,7 +575,7 @@ namespace mem {
         if (flags & MAP_ANONYMOUS) {
             if (flags & MAP_SHARED)
                 klib::printf("mmap: shared anonymous mapping not supported\n");
-            process->pagemap->map_anonymous(base, aligned_size, mmap_prot_to_page_flags(prot));
+            process->pagemap->map_anonymous(base, aligned_size, mmap_prot_to_page_flags(prot), !(flags & MAP_FIXED));
         } else {
             vfs::FileDescription *description = vfs::get_file_description(fd);
             if (!description)
@@ -674,8 +677,14 @@ namespace mem {
         case MADV_WILLNEED:
         case MADV_DONTDUMP:
         case MADV_DODUMP:
+        case MADV_HUGEPAGE:
         case MADV_NOHUGEPAGE:
+        case MADV_MERGEABLE:
+        case MADV_UNMERGEABLE:
             return 0; // these operations are safe to ignore
+        case MADV_DONTFORK:
+            klib::printf("madvise: MADV_DONTFORK unsupported\n");
+            return 0;
         case MADV_FREE: // FIXME: not actually equivalent
         case MADV_DONTNEED: {
             usize num_pages = length / PAGE_SIZE;

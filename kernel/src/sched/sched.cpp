@@ -23,7 +23,7 @@
 
 namespace sched {
     constexpr usize sched_freq = 200; // Hz
-    constexpr usize kernel_stack_size = 64 * 1024;
+    constexpr usize kernel_stack_size = 256 * 1024;
     constexpr usize user_stack_size = 8 * 1024 * 1024;
     constexpr usize user_binary_base = 0x560000000000;
     constexpr usize user_linker_base = 0x7e0000000000;
@@ -92,6 +92,16 @@ namespace sched {
         process->num_living_threads++;
         get_thread_table()[tid] = this;
         state = BLOCKED;
+
+        armed_timers_list.init();
+
+        uptr new_kernel_stack = mem::vmm->virt_alloc(kernel_stack_size);
+        mem::vmm->kernel_pagemap.map_anonymous(new_kernel_stack, kernel_stack_size, PAGE_PRESENT | PAGE_WRITABLE | PAGE_NO_EXECUTE);
+        this->kernel_stack = new_kernel_stack + kernel_stack_size;
+        this->saved_kernel_stack = this->kernel_stack;
+        // prefault the kernel stack since page faults cant be handled without a stack
+        for (usize i = 0; i < kernel_stack_size / PAGE_SIZE; i++)
+            *(u8*)(new_kernel_stack + i * PAGE_SIZE) = 0;
     }
 
     Thread::~Thread() {
@@ -102,6 +112,12 @@ namespace sched {
         if (extended_state)
             klib::free(extended_state);
         procfs_dir->remove();
+
+        Timer *timer;
+        LIST_FOR_EACH_SAFE(timer, &armed_timers_list, thread_timers_link)
+            timer->disarm();
+
+        mem::vmm->kernel_pagemap.add_range(kernel_stack - kernel_stack_size, kernel_stack_size, 0, mem::MappedRange::Type::NONE, 0, nullptr, 0, false, true, false);
     }
 
     Process::Process() :
@@ -239,10 +255,8 @@ namespace sched {
     Thread* new_kernel_thread(void (*func)(), bool enqueue, const char *name) {
         Thread *thread = new Thread(kernel_process, allocate_tid());
 
-        void *kernel_stack = klib::malloc(kernel_stack_size);
-        memset(kernel_stack, 0, kernel_stack_size);
-        thread->user_stack = (uptr)kernel_stack + kernel_stack_size;
-        thread->saved_user_stack = thread->user_stack;
+        thread->user_stack = thread->kernel_stack;
+        thread->saved_kernel_stack = thread->saved_kernel_stack;
 
         thread->running_on = 0;
         thread->gpr_state.cs = u64(cpu::GDTSegment::KERNEL_CODE_64);
@@ -264,13 +278,6 @@ namespace sched {
     }
 
     void Thread::init_user(uptr entry, uptr new_stack) {
-        if (!kernel_stack) {
-            void *new_kernel_stack = klib::malloc(kernel_stack_size);
-            memset(new_kernel_stack, 0, kernel_stack_size);
-            kernel_stack = (uptr)new_kernel_stack + kernel_stack_size;
-            saved_kernel_stack = kernel_stack;
-        }
-
         running_on = 0;
         gpr_state = cpu::InterruptState();
         gpr_state.cs = u64(cpu::GDTSegment::USER_CODE_64) | 3;
@@ -392,14 +399,22 @@ namespace sched {
                 interpreter_arg[interpreter_arg_len] = '\0';
             }
 
-            vfs::Entry *starting_point = interpreter_path[0] != '/' ? process->cwd : nullptr;
-            auto *entry = vfs::path_to_entry(interpreter_path, starting_point);
+            auto *entry = vfs::path_to_entry(interpreter_path, process->cwd);
             if (entry->vnode == nullptr) return err = -ENOENT;
             if (entry->vnode->node_type != vfs::NodeType::REGULAR) return err = -EACCES;
             executable = entry;
 
             if (err = elf::load(process->pagemap, executable->vnode, user_binary_base, &ld_path, &auxv, &process->mmap_anon_base); err < 0)
                 return err;
+        }
+
+        char *interpreter_target_path = nullptr;
+        defer { if (interpreter_target_path) delete[] interpreter_target_path; };
+        if (interpreter_path) {
+            usize path_len = klib::strlen(path);
+            interpreter_target_path = new char[path_len + 1];
+            memcpy(interpreter_target_path, path, path_len + 1);
+            argv[0] = interpreter_target_path;
         }
 
         process->brk = process->mmap_anon_base + 0x30000000;
@@ -563,13 +578,6 @@ namespace sched {
         session->leader_group = init_process->group;
 
         Thread *thread = new Thread(init_process, init_process->pid);
-
-        if (!thread->kernel_stack) {
-            void *kernel_stack = klib::malloc(kernel_stack_size);
-            memset(kernel_stack, 0, kernel_stack_size);
-            thread->kernel_stack = (uptr)kernel_stack + kernel_stack_size;
-            thread->saved_kernel_stack = thread->kernel_stack;
-        }
 
         thread->cred.uids.rid = 0; thread->cred.uids.eid = 0; thread->cred.uids.fsid = 0; thread->cred.uids.sid = 0;
         thread->cred.gids.rid = 0; thread->cred.gids.eid = 0; thread->cred.gids.fsid = 0; thread->cred.gids.sid = 0;
@@ -874,11 +882,6 @@ namespace sched {
             new_thread->user_stack = old_thread->user_stack;
             new_thread->saved_user_stack = cpu->user_stack;
         }
-
-        void *kernel_stack = klib::malloc(kernel_stack_size);
-        memset(kernel_stack, 0, kernel_stack_size);
-        new_thread->kernel_stack = (uptr)kernel_stack + kernel_stack_size;
-        new_thread->saved_kernel_stack = new_thread->kernel_stack;
 
         new_thread->signal_mask = old_thread->signal_mask;
         new_thread->signal_alt_stack = old_thread->signal_alt_stack;
@@ -1296,7 +1299,7 @@ namespace sched {
             if (attr != PR_SET_VMA_ANON_NAME)
                 return -EINVAL;
 
-            klib::printf("prctl: PR_SET_VMA_ANON_NAME unimplemented, addr: %#lX, size: %#lX, name: %s", addr, size, name);
+            klib::printf("prctl: PR_SET_VMA_ANON_NAME unimplemented, addr: %#lX, size: %#lX, name: %s\n", addr, size, name);
         } return 0;
         case PR_CAPBSET_READ: return 1;
         default:

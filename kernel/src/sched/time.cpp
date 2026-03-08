@@ -20,6 +20,7 @@ namespace sched {
             this->callback = callback;
             this->callback_data = callback_data;
         }
+        cpu::get_current_thread()->armed_timers_list.add_before(&this->thread_timers_link);
 
         klib::SpinlockGuard guard(armed_timers_lock);
         armed_timers_list.add_before(&this->armed_timers_link);
@@ -36,6 +37,8 @@ namespace sched {
         klib::SpinlockGuard guard(armed_timers_lock);
         if (!this->armed_timers_link.is_invalid())
             this->armed_timers_link.remove();
+        if (!this->thread_timers_link.is_invalid())
+            this->thread_timers_link.remove();
     }
 
     void init_time(limine_boot_time_response *boot_time_res) {
@@ -46,6 +49,7 @@ namespace sched {
     }
 
     void update_time(klib::TimeSpec interval) {
+        klib::InterruptLock interrupt_guard;
         monotonic_clock += interval;
         realtime_clock += interval;
 
@@ -70,8 +74,10 @@ namespace sched {
         }
     }
 
-    klib::TimeSpec get_clock(clockid_t clock_id) {
-        auto current_interval = klib::TimeSpec::from_microseconds(sched::timer::apic_timer::µs_since_interrupt());
+    klib::TimeSpec get_clock(clockid_t clock_id, bool imprecise) {
+        auto current_interval = imprecise ? klib::TimeSpec() : klib::TimeSpec::from_microseconds(sched::timer::apic_timer::µs_since_interrupt());
+
+        klib::InterruptLock interrupt_guard;
         switch (clock_id) {
         case CLOCK_BOOTTIME:
         case CLOCK_MONOTONIC: return monotonic_clock + current_interval;
