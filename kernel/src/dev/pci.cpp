@@ -1,5 +1,6 @@
 #include <dev/pci.hpp>
 #include <dev/virtio.hpp>
+#include <dev/xhci.hpp>
 #include <mem/vmm.hpp>
 #include <klib/cstdio.hpp>
 
@@ -160,6 +161,9 @@ namespace dev::pci {
             }
         });
 
+        interrupt_line = config_read<u8>(Config::INTERRUPT_LINE);
+        interrupt_pin = config_read<u8>(Config::INTERRUPT_PIN);
+
         if (vendor_id == 0x1af4 && device_id == 0x1000) {
             auto *virtio_net = new virtio::NetDevice();
             virtio_net->pci_device = this;
@@ -168,6 +172,11 @@ namespace dev::pci {
             auto *virtio_blk = new virtio::BlockDevice();
             virtio_blk->pci_device = this;
             virtio_blk->init();
+        } else if (class_code == 0xC && subclass_code == 0x3 && prog_if == 0x30) {
+            auto *xhci = new xhci::Controller();
+            xhci->pci_device = this;
+            if (isize err = xhci->init(); err < 0)
+                klib::printf("PCI: XHCI init failed with errno %ld\n", -err);
         }
     }
 

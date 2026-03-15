@@ -16,6 +16,8 @@ namespace dev::pci {
         constexpr u32 PROG_IF = 0x9;
         constexpr u32 HEADER_TYPE = 0xE;
         constexpr u32 CAP_PTR = 0x34;
+        constexpr u32 INTERRUPT_LINE = 0x3C;
+        constexpr u32 INTERRUPT_PIN = 0x3D;
     }
 
     namespace Command {
@@ -114,6 +116,17 @@ namespace dev::pci {
         }
     };
 
+    struct Registers {
+        pci::BAR *bar;
+        u32 bar_offset;
+        u32 length;
+
+        template<klib::Integral T> inline T read(u32 offset) { return bar->read<T>(bar_offset + offset); }
+        template<klib::Integral T> inline void write(u32 offset, T value) { bar->write<T>(bar_offset + offset, value); }
+        template<klib::Integral T> inline void set_bit(u32 offset, u64 bit) { write<T>(offset, read<T>(offset) | bit); }
+        template<klib::Integral T> inline void clear_bit(u32 offset, u64 bit) { write<T>(offset, read<T>(offset) & ~bit); }
+    };
+
     struct MSIX {
         bool exists;
         u32 cap_ptr;
@@ -130,6 +143,7 @@ namespace dev::pci {
         u8 class_code, subclass_code, prog_if;
         BAR bars[6];
         MSIX msix;
+        u8 interrupt_pin, interrupt_line;
 
         template<klib::Integral T> inline T config_read(u32 offset) { return pci::config_read<T>(bus, dev, function, offset); }
         template<klib::Integral T> inline void config_write(u32 offset, T value) { pci::config_write<T>(bus, dev, function, offset, value); }

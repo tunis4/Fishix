@@ -1,8 +1,14 @@
 # Fishix
 
-A hobby kernel for x86_64 with Linux binary compatibility. It is written in C++ and is capable of running a decent amount of Linux userspace programs, such as KDE Plasma, GIMP, Minecraft and Factorio.
+A hobby kernel for x86_64 with Linux binary compatibility, written from scratch in C++
 
-It can run on real hardware from a live USB. Since the focus is currently entirely on userspace support, drivers are very limited. SMP is not yet supported, only one core will be used. Networking is currently UDP only. Only the Limine bootloader is supported.
+Notable features:
+- Capable of running many Linux programs such as KDE Plasma (X11), GIMP, Minecraft and Factorio
+- Runs on real hardware
+- USB (xHCI) and PS/2 keyboard/mouse
+- Networking (currently UDP-only) with virtio-net
+
+SMP is not yet supported, only one core will be used. Only the Limine bootloader is supported.
 
 The long term goal of the project is for it to be somewhat usable in place of the Linux kernel on a basic desktop system.
 

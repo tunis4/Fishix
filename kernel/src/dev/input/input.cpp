@@ -11,7 +11,11 @@ namespace dev::input {
     InputListener *debug_key_listener = nullptr;
 
     void init() {
-        ps2::init();
+        if (main_keyboard || main_mouse) {
+            klib::printf("Input: Already have keyboard or mouse, skipping PS/2 initialization\n");
+        } else {
+            ps2::init();
+        }
 
         if (main_keyboard) {
             debug_key_listener = main_keyboard->create_listener("debug_key_listener", [] (void*) {

@@ -18,7 +18,7 @@ namespace dev::virtio {
             u32 offset = pci_device->config_read<u32>(cap_ptr + Cap::BAR_OFFSET);
             u32 length = pci_device->config_read<u32>(cap_ptr + Cap::BAR_LENGTH);
 
-            Config *config;
+            pci::Registers *config;
             switch (type) {
             case Cap::Type::COMMON_CFG: config = &common_cfg; break;
             case Cap::Type::DEVICE_CFG: config = &device_cfg; break;

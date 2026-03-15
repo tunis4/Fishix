@@ -13,6 +13,7 @@ add_global_arguments([
     '-fno-pie',
     '-fno-pic',
     '-fno-omit-frame-pointer',
+    '-mno-omit-leaf-frame-pointer',
     '-march=x86-64',
     '-mabi=sysv',
     '-mno-80387',
@@ -68,6 +69,7 @@ source_files = [
     'src/dev/devnode.cpp',
     'src/dev/pci.cpp',
     'src/dev/virtio.cpp',
+    'src/dev/xhci.cpp',
 
     'src/dev/tty/tty.cpp',
     'src/dev/tty/pty.cpp',
@@ -75,6 +77,7 @@ source_files = [
 
     'src/dev/input/input.cpp',
     'src/dev/input/evdev.cpp',
+    'src/dev/input/usbhid.cpp',
     'src/dev/input/ps2/ps2.cpp',
     'src/dev/input/ps2/keyboard.cpp',
     'src/dev/input/ps2/mouse.cpp',

@@ -40,7 +40,10 @@ namespace dev::input::ps2 {
     // }
 
     void init() {
-        write_command(CTRL_CMD_DISABLE_P1);
+        if (write_command(CTRL_CMD_DISABLE_P1)) {
+            klib::printf("PS/2: First command failed\n");
+            return;
+        }
         write_command(CTRL_CMD_DISABLE_P2);
         flush_out_buffer();
 
@@ -133,9 +136,16 @@ namespace dev::input::ps2 {
     }
 
     void flush_out_buffer() {
+        int i = 0;
         u8 status;
-        while ((status = cpu::in<u8>(PORT_STATUS)) & (1|2))
+        while ((status = cpu::in<u8>(PORT_STATUS)) & (1|2)) {
             cpu::in<u8>(PORT_DATA);
+            i++;
+            if (i == 50) {
+                klib::printf("PS/2: Flush out buffer timeout\n");
+                return;
+            }
+        }
     }
 
     int write_command(u8 cmd) {

@@ -63,20 +63,11 @@ namespace dev::virtio {
     struct Device {
         pci::Device *pci_device;
 
-        struct Config {
-            pci::BAR *bar;
-            u32 bar_offset;
-            u32 length;
-
-            template<klib::Integral T> inline T read(u32 offset) { return bar->read<T>(bar_offset + offset); }
-            template<klib::Integral T> inline void write(u32 offset, T value) { bar->write<T>(bar_offset + offset, value); }
-        };
-
-        struct NotifyConfig : public Config {
+        struct NotifyConfig : public pci::Registers {
             u32 notify_offset_multiplier;
         };
 
-        Config common_cfg, device_cfg;
+        pci::Registers common_cfg, device_cfg;
         NotifyConfig notify_cfg;
 
         u64 init(u64 features);
@@ -102,8 +93,6 @@ namespace dev::virtio {
         };
 
         struct Request {
-            using Callback = void(std::coroutine_handle<>);
-
             Request *next;
             klib::RequestCallback<isize> callback;
             volatile RequestHeader request_header;

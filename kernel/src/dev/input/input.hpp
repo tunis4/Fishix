@@ -65,7 +65,7 @@ namespace dev::input {
         void flush_events();
     };
 
-    struct KeyboardDevice : public InputDevice {
+    struct KeyboardDevice : virtual public InputDevice {
         bool caps_lock = false;
 
         inline bool is_ctrl()  { return key_status.get(KEY_LEFTCTRL)  || key_status.get(KEY_RIGHTCTRL);  }
@@ -76,7 +76,7 @@ namespace dev::input {
         KeyboardDevice() {}
     };
 
-    struct MouseDevice : public InputDevice {
+    struct MouseDevice : virtual public InputDevice {
         MouseDevice() {}
     };
 

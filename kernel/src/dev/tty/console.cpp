@@ -119,6 +119,7 @@ namespace dev::tty {
         case KEY_F11:   input_buffer.write_truncate("\e[23~", 5); break;
         case KEY_F12:   input_buffer.write_truncate("\e[24~", 5); break;
         default:
+            if (input_event.code >= sizeof(keycode_map)) break;
             char c = keycode_map[input_event.code];
             if (!c)
                 break;
