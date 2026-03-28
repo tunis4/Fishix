@@ -129,4 +129,43 @@ namespace pmm {
         page_freelist.add(&page->link);
         stats.total_free_pages++;
     }
+
+    uptr alloc_contiguous_pages(usize num_pages) {
+        klib::SpinlockGuard guard(pmm_lock);
+        
+        const Region *region;
+        LIST_FOR_EACH(region, &region_list, link) {
+            Page *pages = region->pages_array();
+            usize usable = region->num_pages_usable();
+            
+            for (usize i = 0; i <= usable - num_pages; i++) {
+                bool found = true;
+                for (usize j = 0; j < num_pages; j++) {
+                    if (!pages[i + j].free) {
+                        found = false;
+                        i += j;
+                        break;
+                    }
+                }
+                
+                if (found) {
+                    for (usize j = 0; j < num_pages; j++) {
+                        pages[i + j].free = false;
+                        pages[i + j].link.remove();
+                        stats.total_free_pages--;
+                    }
+                    return pages[i].phy();
+                }
+            }
+        }
+        
+        return 0;
+    }
+
+    void free_contiguous_pages(uptr base, usize num_pages) {
+        for (usize i = 0; i < num_pages; i++) {
+            Page *page = find_page(base + i * PAGE_SIZE);
+            if (page) free_page(page);
+        }
+    }
 }

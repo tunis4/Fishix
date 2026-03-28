@@ -69,8 +69,8 @@ void operator delete[](void *ptr) {
 }
 
 void operator delete(void *ptr, usize size) {
-    ::operator delete(ptr);
     memset(ptr, 0xAE, size);
+    ::operator delete(ptr);
 }
 
 void operator delete[](void *ptr, usize size) {

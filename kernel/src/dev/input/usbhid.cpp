@@ -11,7 +11,8 @@ namespace dev::input::usbhid {
     void Device::parse_report_descriptor(u8 *data, u16 length) {
         // Global state
         u32 usage_page = 0;
-        i32 logical_minimum = 0, logical_maximum = 0;
+        [[maybe_unused]] i32 logical_minimum = 0;
+        [[maybe_unused]] i32 logical_maximum = 0;
         u32 report_size = 0;
         u32 report_count = 0;
 

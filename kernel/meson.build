@@ -1,30 +1,41 @@
-project('fishix', ['cpp', 'c', 'nasm'], default_options: [
-    'buildtype=debug', 'warning_level=2', 'cpp_std=gnu++23'
-])
+project('fishix', ['cpp', 'c', 'nasm'],
+    default_options: [
+        'buildtype=debug',
+        'warning_level=2',
+        'cpp_std=gnu++23',
+    ]
+)
 
 fs = import('fs')
 
 add_global_arguments([
-    '-g3', '-pipe',
-    '-Wno-unused-parameter', '-Wno-missing-field-initializers',
+    '-g3',
+    '-pipe',
+    '-Wno-unused-parameter',
+    '-Wno-missing-field-initializers',
 
     '-ffreestanding',
     '-fstack-protector',
     '-fno-pie',
     '-fno-pic',
+
     '-fno-omit-frame-pointer',
     '-mno-omit-leaf-frame-pointer',
+
     '-march=x86-64',
     '-mabi=sysv',
+
     '-mno-80387',
     '-mno-mmx',
     '-mno-sse',
     '-mno-sse2',
+
     '-mno-red-zone',
     '-mgeneral-regs-only',
+
     '-mcmodel=kernel',
     '-MMD',
-], language: ['cpp', 'c'])
+], language: ['c', 'cpp'])
 
 add_global_arguments([
     '-fno-exceptions',
@@ -37,11 +48,9 @@ add_global_link_arguments([
     '-static',
     '-z', 'noexecstack',
     '-T' + meson.current_source_dir() / 'linker.ld',
-], language: ['cpp', 'c'])
+], language: ['c', 'cpp'])
 
 src_include_dir = include_directories('src')
-
-dependencies = []
 
 source_files = [
     'src/kernel.cpp',
@@ -50,7 +59,6 @@ source_files = [
     'src/acpi/tables.cpp',
 
     'src/cpu/cpu.cpp',
-
     'src/cpu/gdt/gdt.cpp',
     'src/cpu/gdt/gdt_flush.asm',
 
@@ -89,6 +97,13 @@ source_files = [
 
     'src/gfx/framebuffer.cpp',
     'src/gfx/terminal.cpp',
+
+    'src/mem/dma.cpp',
+    'src/drivers/drm/drm_core.cpp',
+    'src/drivers/drm/drm_gem.cpp',
+    'src/drivers/drm/drm_modeset.cpp',
+    'src/drivers/drm/drm_fops.cpp',
+    'src/drivers/drm/fishix_drm.cpp',
 
     'src/klib/cppruntime.cpp',
     'src/klib/cstdio.cpp',
@@ -135,26 +150,40 @@ fonts = [
     'ter-u16b.psf',
 ]
 
+ld = find_program('ld')
+
 font_copy_targets = []
 foreach font : fonts
     font_copy_targets += custom_target(
-        'copy font @0@'.format(font.split('/').get(-1)),
-        command: [ 'cp', '@INPUT@', '@OUTPUT@' ],
+        'copy_' + font,
+        command: ['cp', '@INPUT@', '@OUTPUT@'],
         input: font,
         output: '@PLAINNAME@'
     )
 endforeach
 
-ld = find_program('ld')
 font_object_targets = []
-foreach font_copy_target : font_copy_targets
-    font = font_copy_target.full_path().split('/').get(-1)
+
+i = 0
+foreach font : fonts
     font_object_targets += custom_target(
-        'font object @0@'.format(font),
-        command: [ ld, '--relocatable', '--format', 'binary', '--output', '@OUTPUT@', '@INPUT@' ],
-        input: font_copy_target,
-        output: '@BASENAME@.o'
+        'obj_' + font,
+        command: [
+            ld,
+            '--relocatable',
+            '--format', 'binary',
+            '--output', '@OUTPUT@',
+            '@INPUT@'
+        ],
+        input: font_copy_targets[i],
+        output: font + '.o'
     )
+    i += 1
 endforeach
 
-executable('fishix', [source_files, font_object_targets], include_directories: src_include_dir, dependencies: dependencies, install: true)
+executable(
+    'fishix',
+    [source_files, font_object_targets],
+    include_directories: src_include_dir,
+    install: true
+)

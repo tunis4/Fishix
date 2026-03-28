@@ -43,6 +43,9 @@ namespace pmm {
     Page* alloc_page();
     void free_page(Page *page);
 
+    uptr alloc_contiguous_pages(usize num_pages);
+    void free_contiguous_pages(uptr base, usize num_pages);
+
     inline uptr alloc_pages(usize num_pages) {
         ASSERT(num_pages == 1);
         Page *page = alloc_page();
