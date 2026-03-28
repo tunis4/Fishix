@@ -21,6 +21,7 @@ using usize = size_t;
 using isize = i64;
 using uptr = uintptr_t;
 using uint = unsigned int;
+using paddr_t = u64;
 
 using nullptr_t = decltype(nullptr);
 

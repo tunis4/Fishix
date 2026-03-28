@@ -1,93 +1,225 @@
 #pragma once
 
 #include <klib/cstdlib.hpp>
+#include <klib/common.hpp>
 
 namespace klib {
-    template<typename T>
-    class Vector {
-        T *m_buffer;
-        usize m_size;
-        usize m_capacity;
 
-        void increase_capacity(usize new_capacity) {
-            if (new_capacity > m_capacity) {
-                while (new_capacity > m_capacity)
-                    m_capacity = m_capacity ? m_capacity * 2 : 1;
-                m_buffer = (T*)klib::realloc(m_buffer, m_capacity * sizeof(T));
-            }
+template<typename T>
+class Vector {
+private:
+    T* m_buffer = nullptr;
+    usize m_size = 0;
+    usize m_capacity = 0;
+
+    void destroy_range(usize from, usize to) {
+        for (usize i = from; i < to; ++i)
+            m_buffer[i].~T();
+    }
+
+    void reserve_internal(usize new_cap) {
+        if (new_cap <= m_capacity)
+            return;
+
+        usize cap = m_capacity ? m_capacity : 1;
+        while (cap < new_cap)
+            cap *= 2;
+
+        T* new_buf = (T*)klib::malloc(sizeof(T) * cap);
+
+        // move existing objects
+        for (usize i = 0; i < m_size; ++i) {
+            new (new_buf + i) T(klib::move(m_buffer[i]));
+            m_buffer[i].~T();
         }
 
-    public:
-        Vector(usize reserve = 0) : m_size(0), m_capacity(reserve) {
-            m_buffer = (T*)(reserve ? klib::malloc(reserve * sizeof(T)) : nullptr);
+        klib::free(m_buffer);
+
+        m_buffer = new_buf;
+        m_capacity = cap;
+    }
+
+public:
+
+    /* =========================
+        Constructors
+       ========================= */
+
+    Vector() = default;
+
+    explicit Vector(usize reserve) {
+        reserve_internal(reserve);
+    }
+
+    Vector(const Vector& other) {
+        reserve_internal(other.m_size);
+
+        for (usize i = 0; i < other.m_size; ++i)
+            new (m_buffer + i) T(other.m_buffer[i]);
+
+        m_size = other.m_size;
+    }
+
+    Vector(Vector&& other) noexcept {
+        m_buffer = other.m_buffer;
+        m_size = other.m_size;
+        m_capacity = other.m_capacity;
+
+        other.m_buffer = nullptr;
+        other.m_size = 0;
+        other.m_capacity = 0;
+    }
+
+    ~Vector() {
+        clear();
+        klib::free(m_buffer);
+    }
+
+    /* =========================
+        Assignment
+       ========================= */
+
+    Vector& operator=(const Vector& other) {
+        if (this == &other)
+            return *this;
+
+        clear();
+        reserve_internal(other.m_size);
+
+        for (usize i = 0; i < other.m_size; ++i)
+            new (m_buffer + i) T(other.m_buffer[i]);
+
+        m_size = other.m_size;
+        return *this;
+    }
+
+    Vector& operator=(Vector&& other) noexcept {
+        clear();
+        klib::free(m_buffer);
+
+        m_buffer = other.m_buffer;
+        m_size = other.m_size;
+        m_capacity = other.m_capacity;
+
+        other.m_buffer = nullptr;
+        other.m_size = 0;
+        other.m_capacity = 0;
+
+        return *this;
+    }
+
+    /* =========================
+        Element Access
+       ========================= */
+
+    T& operator[](usize index) {
+        return m_buffer[index];
+    }
+
+    const T& operator[](usize index) const {
+        return m_buffer[index];
+    }
+
+    T& back() {
+        return m_buffer[m_size - 1];
+    }
+
+    /* =========================
+        Capacity
+       ========================= */
+
+    void reserve(usize cap) {
+        reserve_internal(cap);
+    }
+
+    usize size() const { return m_size; }
+    usize capacity() const { return m_capacity; }
+    bool empty() const { return m_size == 0; }
+
+    T* data() { return m_buffer; }
+    const T* data() const { return m_buffer; }
+
+    /* =========================
+        Modifiers
+       ========================= */
+
+    template<typename... Args>
+    T& emplace_back(Args&&... args) {
+        reserve_internal(m_size + 1);
+
+        new (m_buffer + m_size)
+            T(klib::forward<Args>(args)...);
+
+        return m_buffer[m_size++];
+    }
+
+    T& push_back(const T& v) {
+        return emplace_back(v);
+    }
+
+    T& push_back(T&& v) {
+        return emplace_back(klib::move(v));
+    }
+
+    void pop_back() {
+        if (!m_size) return;
+        m_buffer[--m_size].~T();
+    }
+
+    void resize(usize new_size) {
+        if (new_size < m_size) {
+            destroy_range(new_size, m_size);
+        } else {
+            reserve_internal(new_size);
+            for (usize i = m_size; i < new_size; ++i)
+                new (m_buffer + i) T();
         }
 
-        ~Vector() {
-            klib::free(m_buffer);
+        m_size = new_size;
+    }
+
+    void clear() {
+        destroy_range(0, m_size);
+        m_size = 0;
+    }
+
+    void remove(usize index) {
+        if (index >= m_size) return;
+
+        m_buffer[index].~T();
+
+        // Shift elements
+        for (usize i = index; i < m_size - 1; ++i) {
+            new (m_buffer + i) T(klib::move(m_buffer[i + 1]));
+            m_buffer[i + 1].~T();
         }
 
-        Vector(const Vector &other) {
-            m_size = other.m_size;
-            m_capacity = other.m_capacity;
-            if (other.m_buffer) {
-                m_buffer = klib::malloc(m_capacity * sizeof(T));
-                for (usize i = 0; i < m_size; i++)
-                    m_buffer[i] = other.m_buffer[i];
-            } else {
-                m_buffer = nullptr;
-            }
-        }
+        --m_size;
+    }
 
-        T& operator [](usize index) const {
-            return m_buffer[index];
-        }
+    /* =========================
+        Iterators
+       ========================= */
 
-        template<typename... Args>
-        T& emplace_back(Args&&... args) {
-            increase_capacity(++m_size);
-            return *new (m_buffer + m_size - 1) T(klib::forward<Args>(args)...);;
-        }
+    struct iterator {
+        T* ptr;
 
-        T& push_back(const T &t) { return emplace_back(t); }
-        T& push_back(T &&t) { return emplace_back(klib::move(t)); }
+        iterator(T* p) : ptr(p) {}
 
-        void resize(usize new_size) {
-            increase_capacity(new_size);
-            m_size = new_size;
-        }
+        T& operator*() const { return *ptr; }
+        T* operator->() const { return ptr; }
 
-        inline constexpr T* data() const { return m_buffer; }
-        inline constexpr usize size() const { return m_size; }
-        inline constexpr usize capacity() const { return m_capacity; }
+        iterator& operator++() { ++ptr; return *this; }
+        iterator operator++(int){ iterator t=*this; ++ptr; return t; }
 
-        void clear() {
-            resize(0);
-        }
+        iterator& operator--() { --ptr; return *this; }
 
-        struct iterator {
-            using value_type = T;
-            using pointer = T*;
-            using reference = T&;
-
-            explicit iterator(pointer ptr) : ptr(ptr) {}
-            reference operator *() const { return *ptr; }
-            pointer operator ->() const { return ptr; }
-
-            iterator& operator ++() { ++ptr; return *this; }  
-            iterator operator ++(int) { iterator tmp = *this; ++ptr; return tmp; }
-            iterator& operator --() { --ptr; return *this; }  
-            iterator operator --(int) { iterator tmp = *this; --ptr; return tmp; }
-
-            friend bool operator ==(const iterator &a, const iterator &b) { return a.ptr == b.ptr; }
-            friend bool operator !=(const iterator &a, const iterator &b) { return a.ptr != b.ptr; }
-            friend usize operator -(const iterator &a, const iterator &b) { return a.ptr - b.ptr; }
-            friend bool operator <(const iterator &a, const iterator &b) { return a.ptr < b.ptr; }
-
-        private:
-            pointer ptr;
-        };
-
-        iterator begin() { return iterator(m_buffer); }
-        iterator end() { return iterator(m_buffer + m_size); }
+        bool operator==(const iterator& o) const { return ptr == o.ptr; }
+        bool operator!=(const iterator& o) const { return ptr != o.ptr; }
     };
-}
+
+    iterator begin() { return iterator(m_buffer); }
+    iterator end() { return iterator(m_buffer + m_size); }
+};
+
+} // namespace klib

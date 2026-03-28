@@ -6,9 +6,9 @@
 #define LIST_ENTRY(link, type, member) (type*)((uptr)link - (uptr)(&((type*)0)->member))
 #define LIST_HEAD(list, type, member) LIST_ENTRY((list)->next, type, member)
 #define LIST_TAIL(list, type, member) LIST_ENTRY((list)->prev, type, member)
-#define LIST_NEXT(elm, member) LIST_ENTRY((elm)->member.next, typeof(*elm), member)
-#define LIST_FOR_EACH(pos, list, member) for (pos = LIST_HEAD(list, typeof(*pos), member); &pos->member != (list); pos = LIST_NEXT(pos, member))
-#define LIST_FOR_EACH_SAFE(pos, list, member) decltype(pos) next; for (pos = LIST_HEAD(list, typeof(*pos), member), next = LIST_NEXT(pos, member); &pos->member != (list); pos = next, next = LIST_NEXT(next, member))
+#define LIST_NEXT(elm, member) LIST_ENTRY((elm)->member.next, typename klib::RemovePointer<decltype(elm)>::type, member)
+#define LIST_FOR_EACH(pos, list, member) for (pos = LIST_HEAD(list, typename klib::RemovePointer<decltype(pos)>::type, member); &pos->member != (list); pos = LIST_NEXT(pos, member))
+#define LIST_FOR_EACH_SAFE(pos, list, member) decltype(pos) next; for (pos = LIST_HEAD(list, typename klib::RemovePointer<decltype(pos)>::type, member), next = LIST_NEXT(pos, member); &pos->member != (list); pos = next, next = LIST_NEXT(next, member))
 
 #define HLIST_ENTRY(link, type, member) (type*)((uptr)link - (uptr)(&((type*)0)->member))
 #define HLIST_FOR_EACH(pos, head) for (pos = (head)->first; pos; pos = pos->next)
@@ -103,4 +103,25 @@ namespace klib {
             return first == nullptr;
         }
     };
-}
+
+    inline bool list_empty(ListHead *head) {
+        return head->is_empty();
+    }
+
+    inline void list_add_tail(ListHead *entry, ListHead *head) {
+        head->add_before(entry);
+    }
+
+    inline ListHead* list_pop_front(ListHead *head) {
+        if (head->is_empty()) return nullptr;
+        ListHead *entry = head->next;
+        entry->remove();
+        return entry;
+    }
+
+} // namespace klib
+
+#define list_entry LIST_ENTRY
+#define list_empty klib::list_empty
+#define list_add_tail klib::list_add_tail
+#define list_pop_front klib::list_pop_front

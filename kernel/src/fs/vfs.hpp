@@ -16,8 +16,11 @@
 #include <errno.h>
 
 namespace sched { struct Process; }
+namespace mem { struct MappedRange; }
 
 namespace vfs {
+    using vm_area = mem::MappedRange;
+
     enum class NodeType : u8 {
         HARD_LINK, // not an actual node type
         REGULAR,
@@ -39,6 +42,10 @@ namespace vfs {
     struct Filesystem;
     struct FilesystemDriver;
     struct FileDescription;
+    struct VNode;
+
+    using inode = VNode;
+    using file = FileDescription;
 
     struct VNode {
         NodeType node_type;
@@ -209,6 +216,23 @@ namespace vfs {
             }
         }
     };
+
+    inline VNode* namei(const char *path) {
+        Entry *e = path_to_entry(path);
+        return e ? e->vnode : nullptr;
+    }
+
+    inline void iput(VNode *vnode) {
+        if (vnode) vnode->decrement_ref_count();
+    }
+
+    inline FileDescription* fget(int fd) {
+        return get_file_description(fd);
+    }
+
+    inline void fput(FileDescription* file) {
+        if (file) file->decrement_ref_count();
+    }
 
     isize syscall_openat(int dirfd, const char *path, int flags, mode_t mode);
     isize syscall_open(const char *path, int flags, mode_t mode);
